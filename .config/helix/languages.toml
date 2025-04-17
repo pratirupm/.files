@@ -1,0 +1,5 @@
+[[language]]
+name = "go"
+auto-format = true
+formatter = { command = "bash", args = ["-c", "goimports | golines -m 80 -t 4"] }
+language-servers = ["gopls"]

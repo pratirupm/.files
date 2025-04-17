@@ -1,0 +1,69 @@
+theme = "gruvbox_dark_hard_modified"
+
+[editor]
+true-color = true
+line-number = "relative"
+rulers = [80]
+bufferline = "always"
+cursorline = true
+color-modes = true
+undercurl = true
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.soft-wrap]
+enable = true
+wrap-at-text-width = true
+
+[editor.whitespace.render]
+space = "all"
+tab = "all"
+newline = "none"
+
+[editor.whitespace.characters]
+space = "·"
+nbsp = "⍽"
+tab = "→"
+newline = "⏎"
+tabpad = "·"
+
+[editor.indent-guides]
+render = true
+
+[editor.statusline]
+left = [ "mode", "spinner", "diagnostics", "file-name" ]
+center = ["version-control"]
+right = ["selections", "position", "file-encoding", "file-line-ending", "file-type"]
+separator = "│"
+mode.normal = "N"
+mode.insert = "I"
+mode.select = "S"
+
+[editor.file-picker]
+hidden = false
+
+[keys.normal]
+S-tab = ":buffer-previous"
+tab = ":buffer-next"
+p = "paste_clipboard_before"
+y = "yank_main_selection_to_clipboard"
+C-x  = ":buffer-close"
+C-g = [
+    ":write-all",
+    ":new",
+    ":insert-output lazygit",
+    ":buffer-close!",
+    ":redraw",
+    ":reload-all"
+]
+
+[editor.lsp]
+display-messages = true
+display-inlay-hints = true
+
+[editor.inline-diagnostics]
+cursor-line = "hint"
+other-lines = "hint"

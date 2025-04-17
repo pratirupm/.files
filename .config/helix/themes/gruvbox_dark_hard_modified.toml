@@ -1,0 +1,19 @@
+inherits = "gruvbox_dark_hard"
+name     = "gruvbox_dark_hard_modified"
+
+# Keywords: bright orange (orange1) in italics
+"keyword"                  = { fg = "orange1", modifiers = ["italic"] }
+"keyword.control"          = { fg = "orange1", modifiers = ["italic"] }
+"keyword.storage"          = { fg = "yellow1", modifiers = ["italic"] }
+"keyword.storage.modifier" = { fg = "purple1", modifiers = ["italic"] }
+"keyword.operator"         = { fg = "orange1", modifiers = ["italic"] }
+"keyword.other"            = { fg = "orange1", modifiers = ["italic"] }
+
+# Constructors: magenta-pink (purple1) in italics
+"constructor"              = { fg = "purple1", modifiers = ["italic"] }
+
+# Functions: lively green (green1) in italics
+"function"                 = { fg = "purple1", modifiers = ["italic"] }
+
+# Inlay hints: muted gray on bg1, italics
+"ui.virtual.inlay-hint"    = { fg = "gray", bg = "bg1", modifiers = ["italic"] }
