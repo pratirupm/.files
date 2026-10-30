@@ -85,6 +85,8 @@ bash /tmp/bootstrap.sh
 
 The one unavoidable entry requirement is an HTTPS fetcher. If none exists, the script prints the install command for the detected package manager and exits.
 
+After the first run, use `dotfiles update`, `dotfiles upgrade`, `dotfiles uninstall`, `dotfiles doctor`, or `dotfiles status`. The URL is only needed on a new machine or after a full wipe.
+
 ## Preflight
 
 Required system tools and why:
@@ -184,14 +186,43 @@ Core lifecycle:
 
 Every created path is recorded in `~/.local/state/dotfiles/manifest.tsv`; replaced files are moved to timestamped backups. Uninstall removes only recorded links that still point at the component and restores backups in reverse order. `--purge` removes declared `DATA_DIRS`.
 
+## Command surface
+
+The URL is used once. Afterwards the `dotfiles` command and zsh wrappers handle everything:
+
+| Command | Action |
+| --- | --- |
+| `dotfiles install` | Re-apply links, install missing components, run doctor |
+| `dotfiles update` | `git pull --ff-only`, then apply new/changed components; no version bumps |
+| `dotfiles upgrade` | `update`, then `mise upgrade`, `micromamba update`, oh-my-zsh/tpm pulls, Mason update, base46 cache rebuild |
+| `dotfiles uninstall [--purge]` | Remove managed links and restore backups; `--purge` removes data dirs |
+| `dotfiles doctor` | Preflight, symlink, version, and component health checks |
+| `dotfiles status` | Current versions and component state |
+
+`bin/dotfiles` is the single implementation. `components/core` links it to `~/.local/bin/dotfiles`, so it works in bash and zsh.
+
+`components/zsh/dotfiles.zsh` is linked to `~/.config/zsh/dotfiles.zsh` and sourced from `.zshrc`. It defines thin wrappers:
+
+```zsh
+dotfiles-install()   { command dotfiles install "$@" }
+dotfiles-update()    { command dotfiles update "$@" }
+dotfiles-upgrade()   { command dotfiles upgrade "$@" }
+dotfiles-uninstall() { command dotfiles uninstall "$@" }
+dotfiles-doctor()    { command dotfiles doctor "$@" }
+dotfiles-status()    { command dotfiles status "$@" }
+```
+
+Wrappers contain no logic; they only forward to `bin/dotfiles`. Every command supports `--dry-run`. `update` and `upgrade` are deliberately separate so pulling config changes never silently bumps tool versions. `upgrade` re-runs the base46 cache rebuild after updating Neovim.
+
 ## zsh
 
 - `ZDOTDIR=~/.config/zsh`, linked from `zsh/zshenv` and `zsh/zshrc`.
 - `fpath` is prepended with the micromamba environment's `share/zsh/site-functions` and `share/zsh/*/functions`, because the built-in `fpath[1]` points at `/usr/local/share/zsh/site-functions`.
 - oh-my-zsh at `~/.local/share/oh-my-zsh`; plugins: `git`, `golang`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, conditional `zsh-eza`.
 - `ZSH_THEME` is empty when starship exists, `robbyrussell` otherwise.
-- oh-my-zsh auto-update is disabled; `update.sh` pulls it.
+- oh-my-zsh auto-update is disabled; `dotfiles upgrade` pulls it.
 - `HISTFILE=~/.local/state/zsh/history`.
+- `dotfiles.zsh` is linked to `~/.config/zsh/dotfiles.zsh`, sourced after oh-my-zsh, and defines the `dotfiles-*` wrappers.
 - `mise activate zsh` and starship init are guarded by `command -v`.
 - `fzf` integration: `source <(fzf --zsh)`; this provides `C-r` history, `C-t` files, `M-c` cd.
 - `FZF_DEFAULT_OPTS` uses the vague-fzf palette.
@@ -258,7 +289,7 @@ Available ports used:
 
 1. Scaffold repo, docs, gitignore, CI.
 2. `lib/common.sh`, `lib/preflight.sh`, `lib/component-api.sh`, `lib/graph.sh`.
-3. `core`, `zsh` components; bootstrap; install/update/uninstall/doctor.
+3. `core`, `zsh` components; bootstrap; `dotfiles` dispatcher, `dotfiles-*` zsh wrappers, install/update/upgrade/uninstall/doctor.
 4. `tmux`, `nvim`, `opencode` components.
 5. Container matrix and Toolbx tests.
 6. Migrate the host: link configs, verify, then push.

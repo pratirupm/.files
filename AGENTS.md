@@ -11,10 +11,24 @@ Scaffolding. Only `PLAN.md`, `AGENTS.md`, `README.md`, and `.gitignore` exist. T
 ```sh
 ./bootstrap.sh                 # clone/update then install
 ./install.sh [--yes] [--dry-run] [--only zsh,tmux,nvim,opencode]
-./update.sh                    # pull, mise upgrade, component updates
+./update.sh                    # same as: bin/dotfiles update
 ./uninstall.sh [--purge]
+bin/dotfiles install
+bin/dotfiles update            # git pull + apply changes, no version bumps
+bin/dotfiles upgrade           # update + mise/micromamba/plugin/Mason upgrades
 bin/dotfiles doctor
 bin/dotfiles status
+```
+
+After install, zsh exposes thin wrappers:
+
+```sh
+dotfiles-install
+dotfiles-update
+dotfiles-upgrade
+dotfiles-uninstall
+dotfiles-doctor
+dotfiles-status
 ```
 
 Once published:
@@ -30,9 +44,10 @@ bootstrap.sh        POSIX sh; preflight -> clone -> exec install.sh
 install.sh          bash; lifecycle dispatcher
 update.sh           bash
 uninstall.sh        bash
-bin/dotfiles        bash; install|update|uninstall|doctor|status
+bin/dotfiles        bash; install|update|upgrade|uninstall|doctor|status
 lib/                common, preflight, component-api, graph
 components/<name>/  component.conf + hooks.sh + config files
+components/zsh/dotfiles.zsh  thin zsh wrappers -> bin/dotfiles
 mise.toml           single source of truth for tool versions
 mise.lock           committed
 ```
@@ -46,6 +61,8 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - Everything installed by the repo stays under `$HOME`; no writes to `/usr`, `/etc`, or `/nix`.
 - No secrets in git. `~/.config/opencode/service.json` contains a password and must stay ignored. Never add `skills/` (5.5 MB).
 - `bootstrap.sh` stays POSIX `sh`; `install.sh`, `update.sh`, and components use `bash`.
+- `dotfiles-*` zsh functions are thin wrappers; all logic lives in `bin/dotfiles`.
+- `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades.
 - `mise` and `micromamba` only; no Linuxbrew, no Nix.
 - The repo is public: run `gitleaks` before pushing.
 

@@ -12,6 +12,21 @@ curl -fsSL https://raw.githubusercontent.com/pratirupm/.files/main/bootstrap.sh 
 
 The bootstrap checks for missing system tools, prints the exact command for your distro, and never runs `sudo`. Dev tools are installed per-user with `mise` and `micromamba`.
 
+## Everyday commands
+
+After the first install, no URL is needed:
+
+| Command | Action |
+| --- | --- |
+| `dotfiles update` | Pull config changes and apply them; no version bumps |
+| `dotfiles upgrade` | Update and then upgrade tools, plugins, Mason, and themes |
+| `dotfiles install` | Re-apply links and install missing components |
+| `dotfiles uninstall [--purge]` | Remove managed links; restore backups |
+| `dotfiles doctor` | Check prerequisites, links, and component health |
+| `dotfiles status` | Show current versions and state |
+
+zsh wrappers are installed as well: `dotfiles-update`, `dotfiles-upgrade`, `dotfiles-install`, `dotfiles-uninstall`, `dotfiles-doctor`, `dotfiles-status`.
+
 ## Components
 
 - `core` — directories, PATH, shell hook
