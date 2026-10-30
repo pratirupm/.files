@@ -265,7 +265,7 @@ upgrade_external_tools() {
 
   if component_is_installed zsh; then
     if command -v micromamba >/dev/null 2>&1; then
-      run micromamba self-update -y || warn "micromamba self-update failed"
+      run micromamba self-update || warn "micromamba self-update failed"
       if [[ -d $zsh_env ]]; then
         run micromamba update -y -p "$zsh_env" -c conda-forge zsh
       fi
