@@ -4,5 +4,6 @@ secrets/
 *.local
 opencode/service.json
 **/service.json
+**/skills/
 mise.local.toml
 .DS_Store

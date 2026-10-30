@@ -1,0 +1,26 @@
+# Managed by pratirupm/.files. This file is linked to ~/.zshenv.
+export ZDOTDIR="$HOME/.config/zsh"
+export ZSH_ENV="$HOME/.local/share/dotfiles/zsh"
+
+typeset -U path fpath
+
+path=(
+  "$HOME/.local/bin"
+  "$HOME/.local/share/mise/shims"
+  "$ZSH_ENV/bin"
+  $path
+)
+
+# Conda's zsh sets fpath[1] to /usr/local/share/zsh/site-functions. Put the
+# environment's own completion functions first so compinit finds them.
+if [[ -d "$ZSH_ENV/share/zsh/site-functions" ]]; then
+  fpath=("$ZSH_ENV/share/zsh/site-functions" $fpath)
+fi
+for _dotfiles_fpath in "$ZSH_ENV"/share/zsh/*/functions(N); do
+  fpath=("$_dotfiles_fpath" $fpath)
+done
+unset _dotfiles_fpath
+
+export HISTFILE="$HOME/.local/state/zsh/history"
+export HISTSIZE=50000
+export SAVEHIST=50000

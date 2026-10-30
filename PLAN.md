@@ -6,6 +6,12 @@ One public repository that provisions four configs — **zsh**, **tmux**, **neov
 
 It must work the same on a workstation, inside a Toolbx container (shared `$HOME`), and on a server over SSH, without installing system packages from the scripts.
 
+## Status
+
+All phases are implemented for this repository: preflight, lifecycle commands,
+components, themes, tests, CI, the host migration, and archiving the old
+`pratirupm/nvim` repository. Other machines only need `dotfiles install`.
+
 ## Constraints
 
 - Everything owned by the user lives under `$HOME`.
@@ -40,7 +46,7 @@ Linuxbrew is ruled out. Nix/NixOS is not used: `/nix` is outside `$HOME`, `nix-p
   install.sh
   update.sh
   uninstall.sh
-  bin/dotfiles            # install | update | uninstall | doctor | status
+  bin/dotfiles            # install | update | upgrade | uninstall | doctor | status
   lib/
     common.sh             # logging, locking, run/dry-run
     preflight.sh          # distro, arch, libc, dependency report
@@ -59,7 +65,7 @@ Linuxbrew is ruled out. Nix/NixOS is not used: `/nix` is outside `$HOME`, `nix-p
   README.md
 ```
 
-`nvim/`, `tmux/`, `zsh/`, `opencode/` inside each component hold the actual config files. This plan describes the target; only the docs exist at scaffold time.
+Component directories hold the actual config files, hooks, and `component.conf`; this plan is implemented by the scripts and components in the repository.
 
 ## Bootstrap
 
@@ -94,7 +100,7 @@ Required system tools and why:
 | Tool | Reason |
 | --- | --- |
 | `git` | lazy.nvim, oh-my-zsh, tpm |
-| `curl` | mise, micromamba, release downloads |
+| `curl` (or `wget`/`python3`/`busybox`) | mise, micromamba, release downloads |
 | `tar`, `gzip`, `xz`, `bzip2` | release archives |
 | `unzip` | Mason `.zip` packages |
 | `find` | runtime and plugin lookups |
@@ -117,7 +123,7 @@ Install with:
   sudo dnf install gcc make unzip
 ```
 
-Package mapping is per family: `dnf`, `apt` (`build-essential`), `pacman` (`base-devel`), `zypper`, `apk` (`build-base`), `nix`.
+Package mapping is per family: `dnf`, `apt` (`build-essential`), `pacman` (`base-devel`), `zypper`, `apk` (`build-base`). NixOS is unsupported: the plan does not write to `/nix`.
 
 Additional checks:
 
@@ -135,7 +141,7 @@ Additional checks:
 - `tmux` 3.7c (static `aqua:tmux/tmux-builds`)
 - `opencode` (`aqua:anomalyco/opencode`)
 - `fzf`, `fd`, `ripgrep`, `eza`, `starship`, `zoxide`
-- `go`, `node` for Mason's Go/npm packages
+- `go`, `node`, `bun` for Mason packages and the `bunx` MCP commands
 - `lazygit`, `stylua`, `shellcheck`, `shfmt`
 
 `~/.local/share/mise/shims` must be on `PATH`; `mise reshim` is run after installs.
@@ -151,7 +157,7 @@ ln -s "$HOME/.local/share/dotfiles/zsh/bin/zsh" "$HOME/.local/bin/zsh"
 
 Each component is a directory with `component.conf` and optional `hooks.sh`.
 
-`component.conf`:
+`component.conf` (TEMPLATES entries use `source|target|mode`; the tmux component renders `tmux.conf` this way so `${HOME}` is expanded at install time):
 
 ```sh
 NAME="nvim"
@@ -160,8 +166,8 @@ REQUIRES=("core")
 AFTER=("zsh")
 SYSTEM_DEPS=("gcc|compile treesitter parsers" "make|build treesitter parsers")
 LINKS=("$DOTFILES/nvim|$HOME/.config/nvim")
-TEMPLATES=("$DOTFILES/opencode/opencode.json.tmpl|$HOME/.config/opencode/opencode.json|600")
-DATA_DIRS=("$HOME/.local/share/nvim" "$HOME/.local/state/nvim")
+TEMPLATES=()
+DATA_DIRS=("$HOME/.local/share/nvim/lazy" "$HOME/.local/share/nvim/mason" "$HOME/.local/share/nvim/base46" "$HOME/.cache/nvim")
 ```
 
 Hooks:
@@ -184,7 +190,7 @@ Core lifecycle:
 
 `update` runs the install path for components that are not marked installed, so adding `components/python/` later is picked up automatically.
 
-Every created path is recorded in `~/.local/state/dotfiles/manifest.tsv`; replaced files are moved to timestamped backups. Uninstall removes only recorded links that still point at the component and restores backups in reverse order. `--purge` removes declared `DATA_DIRS`.
+Every created path is recorded in `~/.local/state/dotfiles/manifest.tsv`; replaced files are moved to timestamped backups. Uninstall removes only recorded links that still point at the component and restores backups in reverse order. `DATA_DIRS` that existed before install are recorded as pre-existing and left alone; data created by the component is removed. `--purge` removes the remaining declared data plus recovery state.
 
 ## Command surface
 
@@ -192,7 +198,7 @@ The URL is used once. Afterwards the `dotfiles` command and zsh wrappers handle 
 
 | Command | Action |
 | --- | --- |
-| `dotfiles install` | Re-apply links, install missing components, run doctor |
+| `dotfiles install` | Re-apply links, install missing components, run doctor; `--only` includes required dependencies |
 | `dotfiles update` | `git pull --ff-only`, then apply new/changed components; no version bumps |
 | `dotfiles upgrade` | Maintainer action: verify a clean, pushable checkout, then upgrade tools/plugins/Mason/themes, commit lockfile changes, and push |
 | `dotfiles uninstall [--purge]` | Remove managed configs, generated data, commands, and restore backups; `--purge` also removes recovery state, repo-installed tools, and the checkout |
@@ -212,11 +218,11 @@ dotfiles-doctor()    { command dotfiles doctor "$@" }
 dotfiles-status()    { command dotfiles status "$@" }
 ```
 
-Wrappers contain no logic; they only forward to `bin/dotfiles`. Every command supports `--dry-run`. `update` and `upgrade` are deliberately separate so pulling config changes never silently bumps tool versions. `upgrade` re-runs the base46 cache rebuild after updating Neovim.
+Wrappers contain no logic; they only forward to `bin/dotfiles`. Every command supports `--dry-run`; install/update also support `--only LIST`, which always includes `REQUIRES`. Interactive confirmations read `/dev/tty`, because `curl | bash` leaves stdin attached to the pipe. `update` and `upgrade` are deliberately separate so pulling config changes never silently bumps tool versions. `update` re-runs the base46 cache rebuild after applying Neovim changes, and `upgrade` does it again after updating Neovim.
 
 ### Upgrade and publish
 
-`dotfiles upgrade` is the maintainer path. It refuses to start unless the working tree is clean and `HEAD` is on a branch with an upstream. It pulls with `--ff-only`, verifies `git push --dry-run` to that upstream succeeds, then runs the upgrades from the updated checkout.
+`dotfiles upgrade` is the maintainer path. It refuses to start unless the working tree is clean and `HEAD` is on a branch with an upstream. It verifies that the checkout is clean and has an upstream, verifies `git push --dry-run` to that upstream succeeds, then pulls with `--ff-only` and runs the upgrades from the updated checkout.
 
 If tracked files changed (typically `mise.lock` and `nvim/lazy-lock.json`) it stages only tracked modifications with `git add -u`, commits `chore: upgrade tools YYYY-MM-DD`, and pushes. If the push fails, the command exits non-zero and leaves the commit local for inspection. It never force-pushes and never stages untracked files.
 
@@ -230,7 +236,7 @@ If nothing tracked changed, it reports that and exits 0 without a commit. Consum
 - restores the newest backups first;
 - removes marked blocks from `.bash_profile` and `.bashrc`;
 - removes `~/.local/bin/dotfiles` and the `dotfiles-*` zsh wrappers;
-- removes component-owned data (`DATA_DIRS`): the micromamba zsh env, oh-my-zsh, tmux plugins, nvim lazy/Mason/base46, and generated caches;
+- removes component-owned data recorded as newly created (`DATA_DIRS`): the micromamba zsh env, oh-my-zsh, tmux plugins, nvim lazy/Mason/base46, and generated caches; pre-existing data is preserved;
 - removes directories recorded as created by the installer, but only when empty.
 
 It keeps recovery state in `~/.local/state/dotfiles` and the `~/.files` checkout so a failed uninstall can be inspected or re-run.
@@ -265,7 +271,7 @@ Always preserved even with `--purge`:
 - `mise activate zsh` and starship init are guarded by `command -v`.
 - `fzf` integration: `source <(fzf --zsh)`; this provides `C-r` history, `C-t` files, `M-c` cd.
 - `FZF_DEFAULT_OPTS` uses the vague-fzf palette.
-- Login: a marked block in `~/.bash_profile` and `~/.bashrc` runs a working-binary test, then `exec ~/.local/bin/zsh -l`. `chsh` and `/etc/shells` are not touched.
+- Login: a marked block in `~/.bash_profile` and `~/.bashrc` runs only for interactive shells, tests the working binary, then `exec ~/.local/bin/zsh -l`. `chsh` and `/etc/shells` are not touched; non-interactive `bash -lc` is left alone.
 - tmux `default-shell` points at the same zsh, so tmux starts zsh even when bash is the login shell.
 
 ## tmux
@@ -289,15 +295,15 @@ Always preserved even with `--purge`:
 - NvChad theme is a base46 port of vague in `lua/themes/vague.lua`; `theme = "vague"` in `lua/chadrc.lua`.
 - `vague.nvim` is **not** loaded directly: base46 caches load after plugins and would overwrite it, or `colorscheme vague` would clear NvChad's `St*`/`Tb*` groups.
 - `TabOn`/`TabOff` and `BufOn`/`BufOff` are undefined in base46; link them to `TbTabOn`/`TbTabOff`/`TbBufOn`/`TbBufOff` after theme load.
-- `lazy-lock.json` is committed; `update` runs restore, not `:Lazy sync`.
+- `lazy-lock.json` is committed; `update` runs restore and rebuilds base46, not `:Lazy sync`.
 
 ## opencode
 
 - `opencode.json` is linked, with `"theme": "vague"`.
 - `vague-opencode/vague.json` is vendored as `opencode/themes/vague.json` and linked to `~/.config/opencode/themes/vague.json`.
-- The absolute bun path in the Playwright MCP command is replaced with `bunx -y @playwright/mcp`.
+- The absolute bun path in the Playwright MCP command is replaced with `bunx -y @playwright/mcp`; `bun` is installed by mise.
 - `service.json` is never committed; it contains a password. `skills/` is excluded (5.5 MB).
-- `opencode` is updated through `mise upgrade`, not its self-updater.
+- `opencode` is updated through `mise upgrade`, not its self-updater; `autoupdate` is disabled in the config.
 
 ## Vague theme
 
@@ -311,7 +317,7 @@ Available ports used:
 
 ## Testing
 
-- `shellcheck` all scripts; `bash -n`; `stylua --check nvim`.
+- `shellcheck` all scripts; `bash -n`; `stylua --check components/nvim`.
 - `podman run --rm` with `HOME` in a container-local dir or tmpfs, never the host home.
 - Cases:
   1. stripped Fedora: preflight reports missing git/gcc/make and exits 2;

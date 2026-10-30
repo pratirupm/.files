@@ -1,0 +1,548 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SELF=$(readlink -f -- "${BASH_SOURCE[0]}")
+DOTFILES_DIR=${DOTFILES_DIR:-$(cd -- "$(dirname -- "$SELF")/.." && pwd)}
+DOTFILES=$DOTFILES_DIR
+export DOTFILES_DIR DOTFILES
+
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+export XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
+export XDG_STATE_HOME=${XDG_STATE_HOME:-$HOME/.local/state}
+export XDG_CACHE_HOME=${XDG_CACHE_HOME:-$HOME/.cache}
+
+# shellcheck source=lib/common.sh
+source "$DOTFILES_DIR/lib/common.sh"
+# shellcheck source=lib/preflight.sh
+source "$DOTFILES_DIR/lib/preflight.sh"
+# shellcheck source=lib/graph.sh
+source "$DOTFILES_DIR/lib/graph.sh"
+# shellcheck source=lib/component-api.sh
+source "$DOTFILES_DIR/lib/component-api.sh"
+
+COMMAND=""
+ONLY=""
+PURGE=false
+UPSTREAM=""
+
+usage() {
+  cat <<'EOF'
+Usage: dotfiles <command> [options]
+
+Commands:
+  install              Apply links/templates and install missing components
+  update               git pull --ff-only, then apply changed components
+  upgrade              Maintainer upgrade: verify, upgrade tools, commit, push
+  uninstall [--purge]  Remove managed configs; --purge also removes tools/state
+  doctor               Check prerequisites, links, and component health
+  status               Show versions and component state
+
+Options:
+  -n, --dry-run        Print actions without changing anything
+  -y, --yes            Assume yes for backups and --purge
+      --only LIST      Comma-separated components (dependencies are included)
+  -h, --help           Show this help
+EOF
+}
+
+parse_args() {
+  while (($#)); do
+    case "$1" in
+      -n | --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      -y | --yes)
+        ASSUME_YES=true
+        shift
+        ;;
+      --only)
+        [[ $# -ge 2 ]] || die "--only requires a comma-separated component list"
+        ONLY=$2
+        shift 2
+        ;;
+      --only=*)
+        ONLY=${1#*=}
+        shift
+        ;;
+      --purge)
+        PURGE=true
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -*)
+        die "unknown option: $1 (try --help)"
+        ;;
+      *)
+        if [[ -z $COMMAND ]]; then
+          COMMAND=$1
+          shift
+        else
+          die "unexpected argument: $1"
+        fi
+        ;;
+    esac
+  done
+  [[ -n $COMMAND ]] || {
+    usage
+    exit 2
+  }
+}
+
+check_existing_targets() {
+  local -a unmanaged=()
+  mapfile -t unmanaged < <(collect_unmanaged_targets)
+  ((${#unmanaged[@]})) || return 0
+
+  warn "existing paths are not managed by this repository:"
+  printf '  %s\n' "${unmanaged[@]}" >&2
+  warn "they will be moved to $BACKUPS_DIR and restored by uninstall"
+
+  if $DRY_RUN; then
+    return 0
+  fi
+  if $ASSUME_YES; then
+    return 0
+  fi
+  if prompt_yes "Back up these paths and continue?"; then
+    return 0
+  fi
+  die "aborted; re-run with --yes to accept the backups"
+}
+
+ensure_mise() {
+  if command -v mise >/dev/null 2>&1; then
+    return 0
+  fi
+  if $DRY_RUN; then
+    info "[dry-run] install mise into $HOME/.local/bin/mise"
+    return 0
+  fi
+  info "install mise"
+  mkdir -p "$HOME/.local/bin" "$STATE_DIR"
+  local tmp
+  tmp=$(mktemp "${TMPDIR:-/tmp}/mise-install.XXXXXX")
+  http_get https://mise.run "$tmp"
+  MISE_INSTALL_PATH="$HOME/.local/bin/mise" sh "$tmp"
+  rm -f -- "$tmp"
+  touch "$STATE_DIR/mise-installed"
+  export PATH="$HOME/.local/bin:$PATH"
+}
+
+ensure_micromamba() {
+  if command -v micromamba >/dev/null 2>&1; then
+    return 0
+  fi
+  local arch url
+  case "$ARCH" in
+    x86_64) arch=linux-64 ;;
+    aarch64) arch=linux-aarch64 ;;
+    *) die "no micromamba build for $ARCH" ;;
+  esac
+  url="https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-$arch"
+  if $DRY_RUN; then
+    info "[dry-run] download micromamba from $url"
+    return 0
+  fi
+  info "install micromamba"
+  mkdir -p "$HOME/.local/bin"
+  http_get "$url" "$HOME/.local/bin/micromamba"
+  chmod +x "$HOME/.local/bin/micromamba"
+  touch "$STATE_DIR/micromamba-installed"
+  export PATH="$HOME/.local/bin:$PATH"
+}
+
+mise_tools_from_config() {
+  local config="$DOTFILES_DIR/mise.toml"
+  [[ -f $config ]] || return 0
+  awk '
+    /^\[tools\]/ { in_tools=1; next }
+    /^\[/ { in_tools=0 }
+    in_tools && $0 !~ /^[[:space:]]*#/ && index($0, "=") {
+      key=$0; sub(/[[:space:]]*=.*/, "", key); gsub(/"/, "", key); print key
+    }
+  ' "$config"
+}
+
+ensure_toolchain() {
+  if [[ ${DOTFILES_SKIP_TOOLCHAIN:-0} == 1 ]]; then
+    info "skipping toolchain management (DOTFILES_SKIP_TOOLCHAIN=1)"
+    return 0
+  fi
+  ensure_mise
+  if ! command -v mise >/dev/null 2>&1; then
+    $DRY_RUN && return 0
+    die "mise installation did not provide a runnable mise"
+  fi
+  info "install mise tools"
+  run_shell "cd $(printf '%q' "$DOTFILES_DIR") && MISE_YES=1 mise install --locked"
+  run mise reshim
+
+  local tool
+  while IFS= read -r tool; do
+    [[ -n $tool ]] && component_track_tool "$tool"
+  done < <(mise_tools_from_config)
+
+  ensure_micromamba
+}
+
+pull_checkout() {
+  local dir=$1
+  if [[ ${DOTFILES_SKIP_PULL:-0} == 1 ]]; then
+    info "skipping git pull (DOTFILES_SKIP_PULL=1)"
+    return 0
+  fi
+  info "pull $dir"
+  run git -C "$dir" pull --ff-only
+}
+
+install_main() {
+  acquire_lock
+  state_init
+  component_plan "$ONLY"
+  check_existing_targets
+  preflight_run 0
+  ensure_toolchain
+
+  local name
+  for name in "${ORDERED_COMPONENTS[@]}"; do
+    component_install_one "$name"
+  done
+
+  if ! $DRY_RUN; then
+    if ! doctor_main 1; then
+      warn "doctor reported issues after install"
+    fi
+  fi
+}
+
+update_main() {
+  acquire_lock
+  state_init
+  pull_checkout "$DOTFILES_DIR"
+  component_plan "$ONLY"
+  check_existing_targets
+  preflight_run 0
+  ensure_toolchain
+
+  local name
+  for name in "${ORDERED_COMPONENTS[@]}"; do
+    if component_is_installed "$name"; then
+      component_update_one "$name"
+    else
+      component_install_one "$name"
+    fi
+  done
+
+  if ! $DRY_RUN; then
+    if ! doctor_main 1; then
+      warn "doctor reported issues after update"
+    fi
+  fi
+}
+
+upgrade_check() {
+  local dir=$1
+  local status upstream
+  status=$(git -C "$dir" status --porcelain)
+  if [[ -n $status ]]; then
+    die "working tree is not clean; commit or discard changes before upgrade"
+  fi
+  upstream=$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  [[ -n $upstream ]] || die "current branch has no upstream; set one before upgrade"
+  info "upstream: $upstream"
+  run git -C "$dir" push --dry-run
+  UPSTREAM=$upstream
+}
+
+upgrade_external_tools() {
+  local zsh_env="$HOME/.local/share/dotfiles/zsh"
+  local dir
+
+  if component_is_installed zsh; then
+    if command -v micromamba >/dev/null 2>&1; then
+      run micromamba self-update -y || warn "micromamba self-update failed"
+      if [[ -d $zsh_env ]]; then
+        run micromamba update -y -p "$zsh_env" -c conda-forge zsh
+      fi
+    fi
+    git_pull_repo "$HOME/.local/share/oh-my-zsh"
+    for dir in "$HOME/.local/share/oh-my-zsh/custom/plugins"/*; do
+      [[ -d $dir/.git ]] && git_pull_repo "$dir"
+    done
+  fi
+
+  if component_is_installed tmux; then
+    for dir in "$HOME/.tmux/plugins"/*; do
+      [[ -d $dir/.git ]] && git_pull_repo "$dir"
+    done
+  fi
+
+  if component_is_installed nvim; then
+    if command -v nvim >/dev/null 2>&1; then
+      info "upgrade Neovim plugins and Mason tools"
+      run nvim --headless "+Lazy! sync" +qa
+      run nvim --headless "+MasonToolsUpdateSync" +qa
+      run nvim --headless "+lua require('base46').load_all_highlights()" +qa
+    else
+      warn "nvim not found; skipped Neovim plugin and Mason upgrades"
+    fi
+  fi
+}
+
+upgrade_main() {
+  [[ -z $ONLY ]] || die "upgrade does not support --only"
+  acquire_lock
+  state_init
+  component_plan ""
+
+  upgrade_check "$DOTFILES_DIR"
+  if $DRY_RUN; then
+    info "[dry-run] would pull, upgrade tools/plugins/Mason, commit tracked lockfiles, and push to $UPSTREAM"
+    return 0
+  fi
+
+  pull_checkout "$DOTFILES_DIR"
+  preflight_run 0
+  ensure_toolchain
+
+  info "upgrade mise itself"
+  run mise self-update || warn "mise self-update failed; continuing with installed mise"
+  info "upgrade mise tools"
+  run_shell "cd $(printf '%q' "$DOTFILES_DIR") && MISE_YES=1 mise upgrade"
+  run mise reshim
+  upgrade_external_tools
+
+  info "stage tracked changes"
+  git -C "$DOTFILES_DIR" add -u
+  if git -C "$DOTFILES_DIR" diff --cached --quiet; then
+    ok "no tracked changes to publish"
+    return 0
+  fi
+
+  git -C "$DOTFILES_DIR" commit -m "chore: upgrade tools $(date +%F)"
+  if ! git -C "$DOTFILES_DIR" push; then
+    error "push failed; the upgrade commit remains local for inspection"
+    return 1
+  fi
+  ok "upgraded and pushed to $UPSTREAM"
+}
+
+purge_toolchain() {
+  local tool
+  if [[ -f $TOOLS_FILE ]]; then
+    while IFS= read -r tool; do
+      [[ -n $tool ]] || continue
+      if command -v mise >/dev/null 2>&1; then
+        info "mise uninstall $tool"
+        run mise uninstall --yes "$tool" || warn "could not uninstall $tool"
+      fi
+    done <"$TOOLS_FILE"
+  fi
+
+  if [[ -f $STATE_DIR/mise-installed ]]; then
+    info "remove repo-installed mise"
+    run rm -f -- "$HOME/.local/bin/mise"
+  fi
+  if [[ -f $STATE_DIR/micromamba-installed ]]; then
+    info "remove repo-installed micromamba"
+    run rm -f -- "$HOME/.local/bin/micromamba"
+    run rm -rf -- "$HOME/.local/share/micromamba"
+  fi
+}
+
+purge_checkout() {
+  local dir=$1
+  local target
+  target=$(abs_path "$dir")
+  if [[ $target != "$HOME/.files" ]]; then
+    warn "refusing to delete checkout outside \$HOME/.files: $target"
+    return 0
+  fi
+  info "remove checkout $target"
+  run rm -rf -- "$target"
+}
+
+uninstall_main() {
+  [[ -z $ONLY ]] || die "uninstall does not support --only"
+  acquire_lock
+  state_init
+  component_plan ""
+
+  if $PURGE; then
+    if ! $DRY_RUN && ! $ASSUME_YES; then
+      confirm_or_die "Purge removes recovery state, repo-installed tools, and $HOME/.files. Continue?"
+    fi
+  fi
+
+  local i name
+  for ((i = ${#ORDERED_COMPONENTS[@]} - 1; i >= 0; i--)); do
+    name=${ORDERED_COMPONENTS[i]}
+    component_uninstall_one "$name"
+  done
+
+  remove_component_paths
+  restore_backups
+
+  if $PURGE; then
+    purge_toolchain
+    if ! $DRY_RUN; then
+      info "remove recovery state $STATE_DIR"
+      rm -rf -- "$STATE_DIR"
+    fi
+    purge_checkout "$DOTFILES_DIR"
+    ok "purge complete"
+  else
+    for name in "${ORDERED_COMPONENTS[@]}"; do
+      component_mark_uninstalled "$name"
+    done
+    ok "uninstall complete; recovery state is in $STATE_DIR"
+  fi
+}
+
+component_health() {
+  local name=$1
+  local source target failures=0
+  component_load "$name"
+  component_hooks_load "$name"
+
+  while IFS='|' read -r source target _; do
+    [[ -n $target ]] || continue
+    if [[ -L $target && $(readlink -- "$target") == "$source" ]]; then
+      debug "link ok: $target"
+    else
+      error "link missing or changed: $target"
+      failures=$((failures + 1))
+    fi
+  done <<<"${COMP_LINKS[$name]}"
+
+  while IFS='|' read -r source target mode; do
+    [[ -n $target ]] || continue
+    local checksum recorded
+    recorded=$(manifest_entry "$target" 2>/dev/null || true)
+    if [[ -n $recorded ]]; then
+      IFS=$'\t' read -r _ _ _ checksum _ <<<"$recorded"
+    else
+      checksum=""
+    fi
+    if [[ -f $target && -n $checksum && $(file_checksum "$target") == "$checksum" ]]; then
+      debug "template ok: $target"
+    else
+      error "rendered file missing or changed: $target"
+      failures=$((failures + 1))
+    fi
+    : "$mode"
+  done <<<"${COMP_TEMPLATES[$name]}"
+
+  if ! component_is_installed "$name"; then
+    error "component is not marked installed: $name"
+    failures=$((failures + 1))
+  fi
+
+  if declare -F component_doctor >/dev/null 2>&1; then
+    if ! component_doctor; then
+      failures=$((failures + 1))
+    fi
+  fi
+  return "$failures"
+}
+
+doctor_main() {
+  local quiet=${1:-0}
+  local failures=0 name
+  ((quiet == 0)) && info "dotfiles doctor"
+
+  component_plan "$ONLY"
+  preflight_run 1 || failures=$((failures + 1))
+
+  for name in "${ORDERED_COMPONENTS[@]}"; do
+    if ! component_health "$name"; then
+      failures=$((failures + 1))
+    fi
+  done
+
+  if ((quiet == 0)); then
+    log ""
+    log "${C_BOLD}Selected tool versions:${C_RESET}"
+    local -A shown=()
+    for name in "${ORDERED_COMPONENTS[@]}"; do
+      case "$name" in
+        zsh) [[ -z ${shown[zsh]:-} ]] && show_version zsh && shown[zsh]=1 ;;
+        tmux) [[ -z ${shown[tmux]:-} ]] && show_version tmux && shown[tmux]=1 ;;
+        nvim) [[ -z ${shown[nvim]:-} ]] && show_version nvim && shown[nvim]=1 ;;
+        opencode) [[ -z ${shown[opencode]:-} ]] && show_version opencode && shown[opencode]=1 ;;
+      esac
+    done
+  fi
+
+  if ((failures > 0)); then
+    error "doctor found $failures problem(s)"
+    return 1
+  fi
+  ok "doctor checks passed"
+  return 0
+}
+
+show_version() {
+  local cmd=$1 output
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    printf '  %-10s %s\n' "$cmd" "not installed"
+    return 0
+  fi
+  case "$cmd" in
+    tmux) output=$(tmux -V 2>/dev/null | head -1 || true) ;;
+    *) output=$("$cmd" --version 2>/dev/null | head -1 || true) ;;
+  esac
+  printf '  %-10s %s\n' "$cmd" "$output"
+}
+
+status_main() {
+  detect_os
+  detect_arch
+  detect_libc
+  preflight_report_header
+  log ""
+  log "Repository: $DOTFILES_DIR"
+  log "Commit:     $(git -C "$DOTFILES_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  log "State:      $STATE_DIR"
+  log ""
+  log "${C_BOLD}Components:${C_RESET}"
+  component_plan "$ONLY"
+  local name
+  for name in "${ORDERED_COMPONENTS[@]}"; do
+    if component_is_installed "$name"; then
+      printf '  %-12s installed\n' "$name"
+    else
+      printf '  %-12s not installed\n' "$name"
+    fi
+  done
+  log ""
+  log "${C_BOLD}Versions:${C_RESET}"
+  show_version mise
+  show_version zsh
+  show_version tmux
+  show_version nvim
+  show_version opencode
+}
+
+main() {
+  parse_args "$@"
+  case "$COMMAND" in
+    install) install_main ;;
+    update) update_main ;;
+    upgrade) upgrade_main ;;
+    uninstall) uninstall_main ;;
+    doctor) doctor_main 0 ;;
+    status) status_main ;;
+    *)
+      usage
+      die "unknown command: $COMMAND"
+      ;;
+  esac
+}
+
+main "$@"

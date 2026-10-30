@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          install: false
+      - name: Install linters
+        run: mise install shellcheck stylua
+      - name: Shell syntax
+        run: bash -n bootstrap.sh install.sh update.sh uninstall.sh bin/dotfiles lib/*.sh components/*/hooks.sh tests/run.sh
+      - name: ShellCheck
+        run: shellcheck bootstrap.sh install.sh update.sh uninstall.sh bin/dotfiles lib/*.sh components/*/hooks.sh tests/run.sh
+      - name: StyLua
+        run: stylua --check components/nvim
+      - name: JSON
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in [
+              Path("components/opencode/opencode.json"),
+              Path("components/opencode/themes/vague.json"),
+              Path("components/nvim/lazy-lock.json"),
+          ]:
+              json.loads(path.read_text())
+              print(f"{path}: ok")
+          PY
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,18 +4,18 @@ Personal dotfiles for **zsh, tmux, neovim, opencode** on glibc Linux, installed 
 
 ## Status
 
-Scaffolding. Only `PLAN.md`, `AGENTS.md`, `README.md`, and `.gitignore` exist. The scripts and components described below are the target.
+Implemented. The scripts, library, components, themes, tests, and CI described below exist and are exercised by `tests/run.sh` plus the container checks.
 
 ## Commands
 
 ```sh
-./bootstrap.sh                 # clone/update then install
+./bootstrap.sh                  # clone/update then install
 ./install.sh [--yes] [--dry-run] [--only zsh,tmux,nvim,opencode]
-./update.sh                    # same as: bin/dotfiles update
-./uninstall.sh [--purge]
+./update.sh [--dry-run]
+./uninstall.sh [--purge] [--yes]
 bin/dotfiles install
-bin/dotfiles update            # git pull + apply changes, no version bumps
-bin/dotfiles upgrade           # verify pushable, upgrade, commit lockfiles, push
+bin/dotfiles update             # git pull + apply changes, no version bumps
+bin/dotfiles upgrade            # verify pushable, upgrade, commit lockfiles, push
 bin/dotfiles doctor
 bin/dotfiles status
 ```
@@ -49,7 +49,9 @@ lib/                common, preflight, component-api, graph
 components/<name>/  component.conf + hooks.sh + config files
 components/zsh/dotfiles.zsh  thin zsh wrappers -> bin/dotfiles
 mise.toml           single source of truth for tool versions
-mise.lock           committed
+mise.lock           committed, both x86_64 and aarch64
+tests/run.sh        hermetic lifecycle tests with a throwaway HOME
+.github/workflows/  CI: shellcheck, bash -n, stylua, JSON, gitleaks
 ```
 
 Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `python/`, `rust/`, or `go/` placeholders; language support lives in `mise.toml` plus the nvim config unless it has standalone config files.
@@ -64,7 +66,7 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - `dotfiles-*` zsh functions are thin wrappers; all logic lives in `bin/dotfiles`.
 - `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades.
 - `dotfiles upgrade` requires a clean tree, an upstream branch, and a successful `git push --dry-run` **before** upgrading. It stages tracked files only (`git add -u`), commits lockfile changes, and pushes. Never force-push or stage untracked files.
-- `dotfiles uninstall` removes only manifest-recorded paths under `$HOME`, restores backups before deleting recovery state, and skips paths the user modified. `--purge` requires `--yes`, removes repo-installed tools and state, and deletes `~/.files` last. Never delete opencode auth/skills, zsh history, tmux resurrect, or nvim project/shada data.
+- `dotfiles uninstall` removes only manifest-recorded paths under `$HOME`, restores backups before deleting recovery state, and skips paths the user modified. `--purge` requires `--yes` or an interactive confirmation, removes repo-installed tools and state, and deletes `~/.files` last. Never delete opencode auth/skills, zsh history, tmux resurrect, or nvim project/shada data.
 - `mise` and `micromamba` only; no Linuxbrew, no Nix.
 - The repo is public: run `gitleaks` before pushing.
 
@@ -84,8 +86,9 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - **Neovim theme:** NvChad uses base46 bytecode caches loaded after plugins. `vague.nvim` must not be loaded directly; use the base46 port in `lua/themes/vague.lua` and `theme = "vague"`. After changing the theme run `nvim --headless "+lua require('base46').load_all_highlights()" +qa`.
 - **base46 group names:** `TabOn`/`TabOff` and `BufOn`/`BufOff` are undefined. Link them to `TbTabOn`/`TbTabOff`/`TbBufOn`/`TbBufOff` and reapply on `User NvThemeReload`.
 - **tmux:** `default-shell` points at `~/.local/bin/zsh`, so the tmux component requires `zsh`. Source the vendored `vague.conf` for colors, then apply keymaps. Keep `set-clipboard on` for OSC 52.
-- **opencode:** replace absolute bun paths with `bunx -y`; commit a template, never `service.json`.
+- **opencode:** replace absolute bun paths with `bunx -y`; the config is linked, `service.json` is never committed, and `bun` comes from `mise.toml` for `bunx`.
 - **glibc:** Neovim 0.12.6 needs glibc >= 2.34. Detect musl and stop before downloading.
+- **stdin:** `curl | bash` leaves stdin as the pipe. Interactive confirmations read `/dev/tty`; on a machine without a terminal, pass `--yes` or the install stops before changing anything.
 
 ## Conventions
 
@@ -97,16 +100,17 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 ## Verification
 
 ```sh
-shellcheck bootstrap.sh install.sh update.sh uninstall.sh lib/*.sh components/*/hooks.sh
-bash -n bootstrap.sh install.sh update.sh uninstall.sh
-stylua --check nvim
+shellcheck bootstrap.sh install.sh update.sh uninstall.sh bin/dotfiles lib/*.sh components/*/hooks.sh
+bash -n bootstrap.sh install.sh update.sh uninstall.sh bin/dotfiles lib/*.sh components/*/hooks.sh
+stylua --check components/nvim
 gitleaks detect --source . --no-git
+tests/run.sh
 ```
 
 Container tests use a throwaway `HOME` and never the host home:
 
 ```sh
-podman run --rm -e HOME=/tmp/testhome -v "$PWD:/src:ro" fedora:44 bash /src/install.sh --dry-run
+podman run --rm -e HOME=/tmp/testhome -v "$PWD:/src:ro" fedora:44 bash /src/bin/dotfiles install --dry-run
 ```
 
-Test stripped Fedora (preflight failure), Fedora with prerequisites (full install), Ubuntu/Debian/Arch package mapping, Alpine musl rejection, Toolbx shared-home pickup, update with a new component, uninstall/restore.
+Test stripped Fedora (preflight failure), Fedora with prerequisites (full install), Ubuntu/Debian/Arch package mapping, Alpine musl rejection, Toolbx shared-home pickup, update with a new component, uninstall/restore. Integration tests use stubs and a throwaway `HOME`; never run them against the host home.

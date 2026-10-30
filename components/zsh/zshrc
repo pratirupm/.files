@@ -1,0 +1,46 @@
+# Managed by pratirupm/.files. This file is linked to
+# ~/.config/zsh/.zshrc and sourced after ~/.zshenv sets ZDOTDIR.
+mkdir -p "$HOME/.local/state/zsh"
+
+export ZSH="$HOME/.local/share/oh-my-zsh"
+
+if command -v starship >/dev/null 2>&1; then
+  ZSH_THEME=""
+else
+  ZSH_THEME="robbyrussell"
+fi
+
+plugins=(git golang zsh-autosuggestions zsh-syntax-highlighting)
+if [[ -d "$ZSH/custom/plugins/zsh-eza" ]] && command -v eza >/dev/null 2>&1; then
+  plugins+=(zsh-eza)
+fi
+DISABLE_AUTO_UPDATE=true
+
+if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
+  source "$ZSH/oh-my-zsh.sh"
+else
+  print -u2 "dotfiles: oh-my-zsh is not installed; run dotfiles install"
+fi
+
+setopt HIST_IGNORE_DUPS
+setopt SHARE_HISTORY
+setopt INC_APPEND_HISTORY
+setopt AUTO_CD
+
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+fi
+
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi
+
+export FZF_DEFAULT_OPTS="--color=fg:#cdcdcd,bg:#141415,hl:#f3be7c --color=fg+:#aeaed1,bg+:#252530,hl+:#f3be7c --color=border:#606079,header:#6e94b2,gutter:#141415 --color=spinner:#7fa563,info:#f3be7c,pointer:#aeaed1 --color=marker:#d8647e,prompt:#bb9dbd"
+
+if command -v fzf >/dev/null 2>&1; then
+  source <(fzf --zsh)
+fi
+
+if [[ -r "$ZDOTDIR/dotfiles.zsh" ]]; then
+  source "$ZDOTDIR/dotfiles.zsh"
+fi
