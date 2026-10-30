@@ -118,6 +118,10 @@ ensure_mise() {
   if command -v mise >/dev/null 2>&1; then
     return 0
   fi
+  if [[ -x "$HOME/.local/bin/mise" ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+    return 0
+  fi
   if $DRY_RUN; then
     info "[dry-run] install mise into $HOME/.local/bin/mise"
     return 0
@@ -135,6 +139,10 @@ ensure_mise() {
 
 ensure_micromamba() {
   if command -v micromamba >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -x "$HOME/.local/bin/micromamba" ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
     return 0
   fi
   local arch url
