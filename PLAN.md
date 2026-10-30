@@ -194,7 +194,7 @@ The URL is used once. Afterwards the `dotfiles` command and zsh wrappers handle 
 | --- | --- |
 | `dotfiles install` | Re-apply links, install missing components, run doctor |
 | `dotfiles update` | `git pull --ff-only`, then apply new/changed components; no version bumps |
-| `dotfiles upgrade` | `update`, then `mise upgrade`, `micromamba update`, oh-my-zsh/tpm pulls, Mason update, base46 cache rebuild |
+| `dotfiles upgrade` | Maintainer action: verify a clean, pushable checkout, then upgrade tools/plugins/Mason/themes, commit lockfile changes, and push |
 | `dotfiles uninstall [--purge]` | Remove managed links and restore backups; `--purge` removes data dirs |
 | `dotfiles doctor` | Preflight, symlink, version, and component health checks |
 | `dotfiles status` | Current versions and component state |
@@ -213,6 +213,14 @@ dotfiles-status()    { command dotfiles status "$@" }
 ```
 
 Wrappers contain no logic; they only forward to `bin/dotfiles`. Every command supports `--dry-run`. `update` and `upgrade` are deliberately separate so pulling config changes never silently bumps tool versions. `upgrade` re-runs the base46 cache rebuild after updating Neovim.
+
+### Upgrade and publish
+
+`dotfiles upgrade` is the maintainer path. It refuses to start unless the working tree is clean and `HEAD` is on a branch with an upstream. It pulls with `--ff-only`, verifies `git push --dry-run` to that upstream succeeds, then runs the upgrades from the updated checkout.
+
+If tracked files changed (typically `mise.lock` and `nvim/lazy-lock.json`) it stages only tracked modifications with `git add -u`, commits `chore: upgrade tools YYYY-MM-DD`, and pushes. If the push fails, the command exits non-zero and leaves the commit local for inspection. It never force-pushes and never stages untracked files.
+
+If nothing tracked changed, it reports that and exits 0 without a commit. Consumers who only need config changes run `dotfiles update`, which pulls and applies but never pushes.
 
 ## zsh
 
@@ -278,11 +286,12 @@ Available ports used:
   1. stripped Fedora: preflight reports missing git/gcc/make and exits 2;
   2. install prerequisites, then full install;
   3. update with a new fake component;
-  4. uninstall, verify backups restore;
-  5. Ubuntu, Debian, Arch containers for package-manager mapping;
-  6. Alpine for the musl message;
-  7. Toolbx shared-home pickup;
-  8. same test home in a second distro container.
+  4. upgrade with a writable bare remote commits and pushes; with a read-only remote it fails before upgrading;
+  5. uninstall, verify backups restore;
+  6. Ubuntu, Debian, Arch containers for package-manager mapping;
+  7. Alpine for the musl message;
+  8. Toolbx shared-home pickup;
+  9. same test home in a second distro container.
 - CI: `shellcheck`, `gitleaks`, `stylua`, `bash -n`.
 
 ## Implementation phases

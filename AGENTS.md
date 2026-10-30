@@ -15,7 +15,7 @@ Scaffolding. Only `PLAN.md`, `AGENTS.md`, `README.md`, and `.gitignore` exist. T
 ./uninstall.sh [--purge]
 bin/dotfiles install
 bin/dotfiles update            # git pull + apply changes, no version bumps
-bin/dotfiles upgrade           # update + mise/micromamba/plugin/Mason upgrades
+bin/dotfiles upgrade           # verify pushable, upgrade, commit lockfiles, push
 bin/dotfiles doctor
 bin/dotfiles status
 ```
@@ -63,6 +63,7 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - `bootstrap.sh` stays POSIX `sh`; `install.sh`, `update.sh`, and components use `bash`.
 - `dotfiles-*` zsh functions are thin wrappers; all logic lives in `bin/dotfiles`.
 - `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades.
+- `dotfiles upgrade` requires a clean tree, an upstream branch, and a successful `git push --dry-run` **before** upgrading. It stages tracked files only (`git add -u`), commits lockfile changes, and pushes. Never force-push or stage untracked files.
 - `mise` and `micromamba` only; no Linuxbrew, no Nix.
 - The repo is public: run `gitleaks` before pushing.
 

@@ -19,7 +19,7 @@ After the first install, no URL is needed:
 | Command | Action |
 | --- | --- |
 | `dotfiles update` | Pull config changes and apply them; no version bumps |
-| `dotfiles upgrade` | Update and then upgrade tools, plugins, Mason, and themes |
+| `dotfiles upgrade` | Maintainer: verify push access, upgrade tools/plugins/Mason/themes, commit lockfiles, push |
 | `dotfiles install` | Re-apply links and install missing components |
 | `dotfiles uninstall [--purge]` | Remove managed links; restore backups |
 | `dotfiles doctor` | Check prerequisites, links, and component health |
