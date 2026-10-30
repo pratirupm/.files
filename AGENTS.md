@@ -64,6 +64,7 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - `dotfiles-*` zsh functions are thin wrappers; all logic lives in `bin/dotfiles`.
 - `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades.
 - `dotfiles upgrade` requires a clean tree, an upstream branch, and a successful `git push --dry-run` **before** upgrading. It stages tracked files only (`git add -u`), commits lockfile changes, and pushes. Never force-push or stage untracked files.
+- `dotfiles uninstall` removes only manifest-recorded paths under `$HOME`, restores backups before deleting recovery state, and skips paths the user modified. `--purge` requires `--yes`, removes repo-installed tools and state, and deletes `~/.files` last. Never delete opencode auth/skills, zsh history, tmux resurrect, or nvim project/shada data.
 - `mise` and `micromamba` only; no Linuxbrew, no Nix.
 - The repo is public: run `gitleaks` before pushing.
 

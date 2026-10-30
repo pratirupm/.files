@@ -195,7 +195,7 @@ The URL is used once. Afterwards the `dotfiles` command and zsh wrappers handle 
 | `dotfiles install` | Re-apply links, install missing components, run doctor |
 | `dotfiles update` | `git pull --ff-only`, then apply new/changed components; no version bumps |
 | `dotfiles upgrade` | Maintainer action: verify a clean, pushable checkout, then upgrade tools/plugins/Mason/themes, commit lockfile changes, and push |
-| `dotfiles uninstall [--purge]` | Remove managed links and restore backups; `--purge` removes data dirs |
+| `dotfiles uninstall [--purge]` | Remove managed configs, generated data, commands, and restore backups; `--purge` also removes recovery state, repo-installed tools, and the checkout |
 | `dotfiles doctor` | Preflight, symlink, version, and component health checks |
 | `dotfiles status` | Current versions and component state |
 
@@ -221,6 +221,37 @@ Wrappers contain no logic; they only forward to `bin/dotfiles`. Every command su
 If tracked files changed (typically `mise.lock` and `nvim/lazy-lock.json`) it stages only tracked modifications with `git add -u`, commits `chore: upgrade tools YYYY-MM-DD`, and pushes. If the push fails, the command exits non-zero and leaves the commit local for inspection. It never force-pushes and never stages untracked files.
 
 If nothing tracked changed, it reports that and exits 0 without a commit. Consumers who only need config changes run `dotfiles update`, which pulls and applies but never pushes.
+
+### Uninstall and purge
+
+`dotfiles uninstall` reverses the installation:
+
+- removes managed symlinks and rendered files only if they still point at the repo or match the recorded checksum;
+- restores the newest backups first;
+- removes marked blocks from `.bash_profile` and `.bashrc`;
+- removes `~/.local/bin/dotfiles` and the `dotfiles-*` zsh wrappers;
+- removes component-owned data (`DATA_DIRS`): the micromamba zsh env, oh-my-zsh, tmux plugins, nvim lazy/Mason/base46, and generated caches;
+- removes directories recorded as created by the installer, but only when empty.
+
+It keeps recovery state in `~/.local/state/dotfiles` and the `~/.files` checkout so a failed uninstall can be inspected or re-run.
+
+`dotfiles uninstall --purge` additionally removes:
+
+- `~/.local/state/dotfiles` (manifest, logs, backups) after a successful restore;
+- tools installed by the repo (`mise uninstall` for recorded tools, micromamba and its env);
+- `~/.files` last, after all scripts have loaded.
+
+Always preserved even with `--purge`:
+
+- `~/.local/share/opencode` (auth and sessions)
+- `~/.config/opencode/service.json`
+- `~/.config/opencode/skills`
+- `~/.local/state/zsh/history`
+- `~/.tmux/resurrect`
+- `~/.local/share/nvim/projects.json`
+- nvim shada and command history
+
+`--purge` requires `--yes` or an interactive confirmation. Every removal is resolved under `$HOME`, must be present in the manifest, and is skipped with a warning if the path was replaced or edited by the user. `--dry-run` lists the complete removal set without changing anything.
 
 ## zsh
 
@@ -287,11 +318,12 @@ Available ports used:
   2. install prerequisites, then full install;
   3. update with a new fake component;
   4. upgrade with a writable bare remote commits and pushes; with a read-only remote it fails before upgrading;
-  5. uninstall, verify backups restore;
-  6. Ubuntu, Debian, Arch containers for package-manager mapping;
-  7. Alpine for the musl message;
-  8. Toolbx shared-home pickup;
-  9. same test home in a second distro container.
+  5. uninstall removes managed links, commands, shell blocks, plugin data, and caches; backups restore; no dangling symlinks remain;
+  6. purge removes state and the checkout while preserving user data;
+  7. Ubuntu, Debian, Arch containers for package-manager mapping;
+  8. Alpine for the musl message;
+  9. Toolbx shared-home pickup;
+  10. same test home in a second distro container.
 - CI: `shellcheck`, `gitleaks`, `stylua`, `bash -n`.
 
 ## Implementation phases
