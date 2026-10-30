@@ -1,0 +1,8 @@
+.env
+.env.*
+secrets/
+*.local
+opencode/service.json
+**/service.json
+mise.local.toml
+.DS_Store
