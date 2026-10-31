@@ -18,7 +18,16 @@ function M.render()
     return ""
   end
 
-  local utils = require "nvchad.tabufline.utils"
+  -- winbar can be evaluated while NvChad's nvconfig module is still loading.
+  -- Requiring tabufline.utils then creates a circular require and poisons the
+  -- module cache, so defer rendering until nvconfig is available.
+  if type(package.loaded["nvconfig"]) ~= "table" then
+    return ""
+  end
+  local ok, utils = pcall(require, "nvchad.tabufline.utils")
+  if not ok then
+    return ""
+  end
   return api.nvim_win_call(win, function()
     local parts = {}
     for i, bufnr in ipairs(vim.t.bufs) do

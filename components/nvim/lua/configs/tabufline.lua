@@ -72,7 +72,7 @@ local function style_buf(nr, i, w)
   return txt(name .. trailing, tbHlName)
 end
 
-function M.setup()
+local function apply_utils()
   local utils = require "nvchad.tabufline.utils"
   if utils._no_close_icons then
     return
@@ -82,9 +82,38 @@ function M.setup()
   utils.style_buf = style_buf
 end
 
+local function nvconfig_ready()
+  return type(package.loaded["nvconfig"]) == "table"
+end
+
+function M.setup()
+  -- chadrc is loaded while nvconfig itself is still loading. Requiring
+  -- tabufline.utils here would create a circular require and permanently
+  -- poison its module cache, so wait until nvconfig is a real table.
+  if nvconfig_ready() then
+    apply_utils()
+    return
+  end
+
+  vim.schedule(function()
+    if nvconfig_ready() then
+      apply_utils()
+    else
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "VeryLazy",
+        once = true,
+        callback = apply_utils,
+      })
+    end
+  end)
+end
+
 -- Project tabs: show the tab-local cwd basename for each tab instead of a
 -- bare tab number.
 function M.tabs()
+  if not nvconfig_ready() then
+    return {}
+  end
   local utils = require "nvchad.tabufline.utils"
   local result = {}
   local current = vim.fn.tabpagenr()
