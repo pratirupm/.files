@@ -80,7 +80,7 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 
 ## Gotchas
 
-- **mise PATH:** `mise install` does not expose tools. Add `~/.local/share/mise/shims` to `PATH` and run `mise reshim`; do not rely on `mise activate` for non-interactive use.
+- **mise PATH:** `mise install` does not expose tools. Add `~/.local/share/mise/shims` to `PATH` and run `mise reshim`; do not rely on `mise activate` for non-interactive use. Set `MISE_GLOBAL_CONFIG_FILE=$HOME/.files/mise.toml` in `.zshenv`, otherwise shims such as `starship` fail outside the repository with "No version is set for shim".
 - **zsh:** micromamba env at `~/.local/share/dotfiles/zsh`, symlink `~/.local/bin/zsh`. Conda's `fpath[1]` points at `/usr/local/share/zsh/site-functions`; prepend the env's `share/zsh/site-functions` and `share/zsh/*/functions` in `.zshenv`. Do not use `chsh` or edit `/etc/shells`; the login hook tests that zsh actually runs before `exec`.
 - **Toolbx:** `$HOME` is shared, so configs and binaries appear automatically. Keep them glibc-compatible and do not assume Fedora.
 - **Neovim theme:** NvChad uses base46 bytecode caches loaded after plugins. `vague.nvim` must not be loaded directly; use the base46 port in `lua/themes/vague.lua` and `theme = "vague"`. After changing the theme run `nvim --headless "+lua require('base46').load_all_highlights()" +qa`.

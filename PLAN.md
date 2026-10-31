@@ -269,6 +269,7 @@ Always preserved even with `--purge`:
 - `HISTFILE=~/.local/state/zsh/history`.
 - `dotfiles.zsh` is linked to `~/.config/zsh/dotfiles.zsh`, sourced after oh-my-zsh, and defines the `dotfiles-*` wrappers.
 - `mise activate zsh` and starship init are guarded by `command -v`.
+- `MISE_GLOBAL_CONFIG_FILE=$HOME/.files/mise.toml` makes the repository the global version source, so mise shims (`starship`, `tmux`, `nvim`, `opencode`) work from any directory.
 - `fzf` integration: `source <(fzf --zsh)`; this provides `C-r` history, `C-t` files, `M-c` cd.
 - `FZF_DEFAULT_OPTS` uses the vague-fzf palette.
 - Login: a marked block in `~/.bash_profile` and `~/.bashrc` runs only for interactive shells, tests the working binary, then `exec ~/.local/bin/zsh -l`. `chsh` and `/etc/shells` are not touched; non-interactive `bash -lc` is left alone.

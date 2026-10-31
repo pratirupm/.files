@@ -2,6 +2,13 @@
 export ZDOTDIR="$HOME/.config/zsh"
 export ZSH_ENV="$HOME/.local/share/dotfiles/zsh"
 
+# mise shims need a version source outside the repository. Treat the
+# repository's mise.toml as the global config so starship/tmux/nvim resolve
+# from any directory.
+if [[ -r "$HOME/.files/mise.toml" ]]; then
+  export MISE_GLOBAL_CONFIG_FILE="$HOME/.files/mise.toml"
+fi
+
 typeset -U path fpath
 
 path=(
