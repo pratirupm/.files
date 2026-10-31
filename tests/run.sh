@@ -199,6 +199,7 @@ for link in \
   "$HOME/.config/nvim:$ROOT/components/nvim" \
   "$HOME/.zshenv:$ROOT/components/zsh/zshenv" \
   "$HOME/.config/zsh/.zshrc:$ROOT/components/zsh/zshrc" \
+  "$HOME/.config/starship.toml:$ROOT/components/zsh/starship.toml" \
   "$HOME/.config/opencode/opencode.json:$ROOT/components/opencode/opencode.json" \
   "$HOME/.config/opencode/themes/vague.json:$ROOT/components/opencode/themes/vague.json" \
   "$HOME/.config/tmux/vague.conf:$ROOT/components/tmux/vague.conf"; do

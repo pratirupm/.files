@@ -272,6 +272,7 @@ Always preserved even with `--purge`:
 - `MISE_GLOBAL_CONFIG_FILE=$HOME/.files/mise.toml` makes the repository the global version source, so mise shims (`starship`, `tmux`, `nvim`, `opencode`) work from any directory.
 - `fzf` integration: `source <(fzf --zsh)`; this provides `C-r` history, `C-t` files, `M-c` cd.
 - `FZF_DEFAULT_OPTS` uses the vague-fzf palette.
+- `starship.toml` defines a vague palette and module styles; it is linked to `~/.config/starship.toml`.
 - Login: a marked block in `~/.bash_profile` and `~/.bashrc` runs only for interactive shells, tests the working binary, then `exec ~/.local/bin/zsh -l`. `chsh` and `/etc/shells` are not touched; non-interactive `bash -lc` is left alone.
 - tmux `default-shell` points at the same zsh, so tmux starts zsh even when bash is the login shell.
 
@@ -314,6 +315,7 @@ Available ports used:
 - tmux: `vague-tmux`.
 - fzf: `vague-fzf` color flags.
 - opencode: `vague-opencode`.
+- starship: vague palette in `components/zsh/starship.toml`.
 - Optional: `vague-lazygit`, `vague-bat`, and a terminal port (ghostty/kitty/alacritty/wezterm) once the terminal is known.
 
 ## Testing

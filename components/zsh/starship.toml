@@ -1,0 +1,38 @@
+palette = "vague"
+
+[palettes.vague]
+black = "#141415"
+red = "#d8647e"
+green = "#7fa563"
+yellow = "#f3be7c"
+blue = "#6e94b2"
+purple = "#bb9dbd"
+cyan = "#aeaed1"
+white = "#cdcdcd"
+bright-black = "#606079"
+bright-red = "#e37d93"
+bright-green = "#8fb573"
+bright-yellow = "#f7d19a"
+bright-blue = "#8aa9c0"
+bright-purple = "#cbb2cc"
+bright-cyan = "#c3c3d5"
+bright-white = "#e5e5e5"
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[directory]
+style = "bold cyan"
+truncation_length = 3
+truncate_to_repo = true
+
+[git_branch]
+style = "bold purple"
+
+[git_status]
+style = "bold red"
+
+[cmd_duration]
+min_time = 2000
+style = "bold yellow"

@@ -47,7 +47,7 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 ## Components
 
 - `core` — `~/.local/bin/dotfiles` and the guarded bash login hook
-- `zsh` — micromamba zsh, oh-my-zsh, plugins, fzf, starship
+- `zsh` — micromamba zsh, oh-my-zsh, plugins, fzf, and a vague starship prompt
 - `tmux` — vague colors, keymaps, resurrect/continuum
 - `nvim` — vendored NvChad config with a vague base46 theme
 - `opencode` — config, vague theme, and `bunx` MCP servers
