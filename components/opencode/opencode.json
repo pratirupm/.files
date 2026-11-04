@@ -1,7 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "default_agent": "builder",
+  "agents": {
+    "plan": { "hidden": true },
+    "build": { "hidden": true }
+  },
   "theme": "vague",
   "autoupdate": false,
+  "plugins": ["{env:HOME}/.files/components/opencode/plugins/force-background"],
   "mcp": {
     "servers": {
       "playwright": {

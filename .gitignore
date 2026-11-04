@@ -7,3 +7,4 @@ opencode/service.json
 **/skills/
 mise.local.toml
 .DS_Store
+components/opencode/plugins/*/node_modules/

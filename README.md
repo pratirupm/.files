@@ -50,7 +50,9 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 - `zsh` — micromamba zsh, oh-my-zsh, plugins, fzf, and a vague starship prompt
 - `tmux` — vague colors, keymaps, resurrect/continuum
 - `nvim` — vendored NvChad config with a vague base46 theme
-- `opencode` — config, vague theme, and `bunx` MCP servers
+- `opencode` — config, vague theme, `AGENTS.md`, the `planner`/`builder`
+  manager agents, the `scout`/`mechanical`/`worker` subagents, the
+  force-background plugin, and the Playwright/Svelte `bunx` MCP servers
 
 `doctor` and `status` are safe to run on a new machine. `doctor` checks
 prerequisites, symlinks, rendered files, component markers, and versions.
