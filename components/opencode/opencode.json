@@ -9,7 +9,8 @@
       "playwright": {
         "type": "local",
         "command": [
-          "bunx",
+          "bun",
+          "x",
           "-y",
           "@playwright/mcp@latest",
           "--browser",
@@ -20,7 +21,8 @@
       "svelte": {
         "type": "local",
         "command": [
-          "bunx",
+          "bun",
+          "x",
           "-y",
           "@sveltejs/mcp"
         ]

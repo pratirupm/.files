@@ -140,7 +140,7 @@ Additional checks:
 - `neovim` 0.12.6
 - `tmux` 3.7c (static `aqua:tmux/tmux-builds`)
 - `fzf`, `fd`, `ripgrep`, `eza`, `starship`, `zoxide`
-- `go`, `node`, `bun` for Mason packages and the `bunx` MCP commands
+- `go`, `node`, `bun` for Mason packages and the `bun x` MCP commands
 - `lazygit`, `stylua`, `shellcheck`, `shfmt`
 
 `~/.local/share/mise/shims` must be on `PATH`; `mise reshim` is run after installs.
@@ -306,8 +306,8 @@ Always preserved even with `--purge`:
 - `opencode.json` is linked, with `"theme": "vague"` and `"update": "auto"`; OpenCode updates itself and `dotfiles upgrade` does not manage it.
 - The built-in `build` and `plan` agents are left enabled; there are no custom agents or global `AGENTS.md`.
 - `vague-opencode/vague.json` is vendored as `opencode/themes/vague.json` and linked to `~/.config/opencode/themes/vague.json`.
-- The absolute bun path in the Playwright MCP command is replaced with `bunx -y @playwright/mcp@latest`; `bun` is installed by mise.
-- Install resolves the Playwright version required by the current `@playwright/mcp` release and runs `bunx -y playwright@<version> install chromium`. There is no prompt or browser toggle; the MCP always has its matching Chromium.
+- The absolute bun path in the Playwright MCP command is replaced with `bun x -y @playwright/mcp@latest`; `bun` is installed by mise.
+- Install resolves the Playwright version required by the current `@playwright/mcp` release and runs `bun x -y playwright@<version> install chromium`. There is no prompt or browser toggle; the MCP always has its matching Chromium.
 - `service.json` is never committed; it contains a password. `skills/` is excluded (5.5 MB).
 
 ## Vague theme

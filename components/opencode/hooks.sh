@@ -89,8 +89,8 @@ opencode_install_playwright() {
     info "[dry-run] install Playwright Chromium for the MCP server"
     return 0
   fi
-  if ! command -v bun >/dev/null 2>&1 || ! command -v bunx >/dev/null 2>&1; then
-    warn "bun/bunx is not on PATH; the Playwright MCP browser cannot be installed"
+  if ! command -v bun >/dev/null 2>&1; then
+    warn "bun is not on PATH; the Playwright MCP browser cannot be installed"
     return 0
   fi
   if ! version=$(opencode_mcp_playwright_version); then
@@ -98,9 +98,21 @@ opencode_install_playwright() {
     return 0
   fi
   info "install Playwright Chromium for @playwright/mcp (playwright $version)"
-  if ! bunx -y "playwright@$version" install chromium; then
-    warn "failed to install Playwright Chromium; run: bunx -y playwright@$version install chromium"
+  if ! bun x -y "playwright@$version" install chromium; then
+    warn "failed to install Playwright Chromium; run: bun x -y playwright@$version install chromium"
   fi
+}
+
+opencode_browser_root() {
+  if [[ -n ${PLAYWRIGHT_BROWSERS_PATH:-} ]]; then
+    if [[ $PLAYWRIGHT_BROWSERS_PATH == 0 ]]; then
+      printf '%s\n' "$HOME/.bun/install/cache"
+    else
+      printf '%s\n' "$PLAYWRIGHT_BROWSERS_PATH"
+    fi
+    return 0
+  fi
+  printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright"
 }
 
 component_install() {
@@ -231,14 +243,16 @@ if (
     failures=$((failures + 1))
   fi
   if ! command -v bun >/dev/null 2>&1; then
-    error "bun is not on PATH; bunx MCP servers will not start"
+    error "bun is not on PATH; the Bun MCP servers and Playwright browser need it"
     failures=$((failures + 1))
   fi
   if [[ ${DOTFILES_SKIP_BROWSER:-0} != 1 ]]; then
-    browser=$(find "$HOME/.cache/ms-playwright" -maxdepth 3 -type f \
-      \( -name chrome -o -name headless_shell \) -print -quit 2>/dev/null || true)
+    local browser_root
+    browser_root=$(opencode_browser_root)
+    browser=$(find "$browser_root" -maxdepth 8 -type f \
+      \( -name chrome -o -name headless_shell -o -name chrome-headless-shell \) -print -quit 2>/dev/null || true)
     if [[ -z $browser ]]; then
-      error "Playwright Chromium is missing; run: dotfiles install --only opencode"
+      error "Playwright Chromium is missing from $browser_root; run: dotfiles install --only opencode"
       failures=$((failures + 1))
     fi
   fi

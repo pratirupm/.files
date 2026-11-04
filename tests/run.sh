@@ -107,25 +107,22 @@ EOF
 #!/bin/bash
 if [[ ${1:-} == install ]]; then
   mkdir -p node_modules/@opencode/plugin
+elif [[ ${1:-} == x ]]; then
+  shift
+  printf '%s\n' "$*" >>"$HOME/bun.log"
+  version=""
+  for arg in "$@"; do
+    case "$arg" in
+      playwright@*) version=${arg#playwright@} ;;
+    esac
+  done
+  if [[ -n $version ]]; then
+    mkdir -p "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64"
+    printf '#!/bin/sh\nexit 0\n' >"$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+    chmod +x "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+  fi
 fi
 printf '1.4.4\n'
-EOF
-
-  cat >"$dir/bunx" <<'EOF'
-#!/bin/bash
-printf '%s\n' "$*" >>"$HOME/bunx.log"
-version=""
-for arg in "$@"; do
-  case "$arg" in
-    playwright@*) version=${arg#playwright@} ;;
-  esac
-done
-if [[ -n $version ]]; then
-  mkdir -p "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64"
-  printf '#!/bin/sh\nexit 0\n' >"$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
-  chmod +x "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
-fi
-exit 0
 EOF
 
   cat >"$dir/node" <<'EOF'
@@ -285,7 +282,7 @@ DOTFILES_SKIP_OPENCODE_INSTALL=0 DOTFILES_SKIP_BROWSER=0 DOTFILES_PLAYWRIGHT_VER
 assert_file "$HOME/.opencode/bin/opencode"
 assert_file "$HOME/.opencode/bin/opencode2"
 assert_file "$HOME/.local/state/dotfiles/opencode-installed"
-assert_contains "$HOME/bunx.log" "playwright@9.9.9 install chromium"
+assert_contains "$HOME/bun.log" "playwright@9.9.9 install chromium"
 assert_file "$HOME/.cache/ms-playwright/chromium-9.9.9/chrome-linux64/chrome"
 assert_no_link "$HOME/.config/opencode/agents/planner.md"
 assert_no_link "$HOME/.config/opencode/AGENTS.md"

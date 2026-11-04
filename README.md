@@ -72,7 +72,7 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 - `tmux` — vague colors, keymaps, resurrect/continuum
 - `nvim` — vendored NvChad config with a vague base46 theme
 - `opencode` — the official OpenCode V2 installer, config, vague theme,
-  force-background plugin, and the Playwright/Svelte `bunx` MCP servers.
+  force-background plugin, and the Playwright/Svelte Bun MCP servers.
   Install always ensures the Chromium build matching the current
   `@playwright/mcp` Playwright dependency is present; there is no prompt or
   browser toggle. OpenCode updates itself through `"update": "auto"`.
