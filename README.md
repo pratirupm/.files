@@ -28,6 +28,7 @@ bash /tmp/bootstrap.sh
 
 ```sh
 dotfiles install       # apply links/templates and install missing components
+dotfiles install --with-gh  # also install gh via mise and wire git credentials
 dotfiles update        # git pull --ff-only, then apply changes; no version bumps
 dotfiles upgrade       # maintainer: verify, upgrade tools, commit lockfiles, push
 dotfiles uninstall     # remove managed paths and restore backups
@@ -40,6 +41,11 @@ Every command accepts `--dry-run` (`-n`). `install`, `update`, and `uninstall`
 accept `--yes` (`-y`); `install` and `update` accept `--only zsh,tmux` (required
 components are included automatically). `uninstall --purge` requires `--yes` or
 an interactive confirmation.
+
+`install --with-gh` is opt-in: it installs the GitHub CLI with mise, links it to
+`~/.local/bin/gh`, and wires the `gh auth git-credential` helper for
+`github.com` and `gist.github.com`. You still need to run `gh auth login` once
+to authenticate. `update`, `doctor`, and `status` ignore the flag.
 
 zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 `dotfiles-upgrade`, `dotfiles-uninstall`, `dotfiles-doctor`, `dotfiles-status`.

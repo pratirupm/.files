@@ -25,6 +25,7 @@ COMMAND=""
 ONLY=""
 PURGE=false
 UPSTREAM=""
+WITH_GH=false
 
 usage() {
   cat <<'EOF'
@@ -42,6 +43,7 @@ Options:
   -n, --dry-run        Print actions without changing anything
   -y, --yes            Assume yes for backups and --purge
       --only LIST      Comma-separated components (dependencies are included)
+      --with-gh        Install the GitHub CLI (gh) and wire git credentials
   -h, --help           Show this help
 EOF
 }
@@ -68,6 +70,10 @@ parse_args() {
         ;;
       --purge)
         PURGE=true
+        shift
+        ;;
+      --with-gh)
+        WITH_GH=true
         shift
         ;;
       -h | --help)
@@ -208,6 +214,58 @@ pull_checkout() {
   run git -C "$dir" pull --ff-only
 }
 
+install_gh() {
+  local gh_bin="" link=$HOME/.local/bin/gh
+
+  if command -v gh >/dev/null 2>&1; then
+    gh_bin=$(command -v gh)
+  else
+    info "install GitHub CLI (gh)"
+    run env MISE_YES=1 mise install gh@latest
+  fi
+
+  if $DRY_RUN; then
+    info "[dry-run] link gh into $link"
+    ensure_gh_credential_helper
+    return 0
+  fi
+
+  if [[ -z $gh_bin ]]; then
+    local gh_dir
+    gh_dir=$(mise where gh@latest 2>/dev/null || true)
+    if [[ -n $gh_dir && -x $gh_dir/bin/gh ]]; then
+      gh_bin=$gh_dir/bin/gh
+    else
+      gh_bin=$(find "$HOME/.local/share/mise/installs/gh" -path '*/bin/gh' -type f 2>/dev/null | sort -V | tail -1 || true)
+    fi
+    [[ -n $gh_bin ]] || die "could not locate the gh binary after mise install"
+  fi
+
+  if [[ ! -e $link ]] || [[ $(readlink -f -- "$link") != "$(readlink -f -- "$gh_bin")" ]]; then
+    run ln -sfn "$gh_bin" "$link"
+  fi
+
+  ensure_gh_credential_helper
+
+  if ! "$gh_bin" auth status >/dev/null 2>&1; then
+    info "authenticate the GitHub CLI: gh auth login"
+  fi
+}
+
+ensure_gh_credential_helper() {
+  local url helpers
+  for url in https://github.com https://gist.github.com; do
+    helpers=$(git config --global --get-all "credential.$url.helper" 2>/dev/null || true)
+    if grep -Fq -- 'gh auth git-credential' <<<"$helpers"; then
+      debug "gh credential helper already configured for $url"
+      continue
+    fi
+    # Intentionally single-quoted: git expands $HOME when it runs the helper.
+    # shellcheck disable=SC2016
+    run git config --global --add "credential.$url.helper" '!$HOME/.local/bin/gh auth git-credential'
+  done
+}
+
 install_main() {
   acquire_lock
   state_init
@@ -215,6 +273,10 @@ install_main() {
   check_existing_targets
   preflight_run 0
   ensure_toolchain
+
+  if $WITH_GH; then
+    install_gh
+  fi
 
   local name
   for name in "${ORDERED_COMPONENTS[@]}"; do
