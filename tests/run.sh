@@ -105,7 +105,27 @@ EOF
 
   cat >"$dir/bun" <<'EOF'
 #!/bin/bash
+if [[ ${1:-} == install ]]; then
+  mkdir -p node_modules/@opencode/plugin
+fi
 printf '1.4.4\n'
+EOF
+
+  cat >"$dir/bunx" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >>"$HOME/bunx.log"
+version=""
+for arg in "$@"; do
+  case "$arg" in
+    playwright@*) version=${arg#playwright@} ;;
+  esac
+done
+if [[ -n $version ]]; then
+  mkdir -p "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64"
+  printf '#!/bin/sh\nexit 0\n' >"$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+  chmod +x "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+fi
+exit 0
 EOF
 
   cat >"$dir/node" <<'EOF'
@@ -129,10 +149,13 @@ new_home() {
   local name=$1
   HOME="$TEST_ROOT/home-$name"
   rm -rf -- "$HOME"
-  mkdir -p "$HOME"
+  mkdir -p "$HOME/.opencode/bin"
+  cp "$STUBS/opencode" "$HOME/.opencode/bin/opencode"
   export HOME
   export DOTFILES_SKIP_TOOLCHAIN=1
   export DOTFILES_SKIP_NOEXEC=1
+  export DOTFILES_SKIP_OPENCODE_INSTALL=1
+  export DOTFILES_SKIP_BROWSER=1
   export PATH="$STUBS:$ORIGINAL_PATH"
 }
 
@@ -233,6 +256,45 @@ assert_file "$HOME/.local/share/nvim/lazy/user-file"
 pass "uninstall removes managed paths, removes blocks, restores backups, keeps pre-existing data"
 
 # ---------------------------------------------------------------------------
+# opencode uses the official installer, installs matching Chromium, and prunes
+# the old custom-agent links.
+# ---------------------------------------------------------------------------
+new_home opencode
+rm -rf "$HOME/.opencode"
+mkdir -p "$HOME/.config/opencode/agents"
+ln -s "$ROOT/components/opencode/agents/planner.md" "$HOME/.config/opencode/agents/planner.md"
+ln -s "$ROOT/components/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+cat >"$TEST_ROOT/fake-opencode-installer" <<'EOF'
+#!/bin/bash
+set -e
+[[ ${1:-} == --no-modify-path ]] || {
+  echo "--no-modify-path missing" >&2
+  exit 1
+}
+mkdir -p "$HOME/.opencode/bin"
+printf '#!/bin/sh\necho "opencode v2.2.5"\n' >"$HOME/.opencode/bin/opencode"
+chmod +x "$HOME/.opencode/bin/opencode"
+printf '#!/bin/sh\nexec "$(dirname "$0")/opencode" "$@"\n' >"$HOME/.opencode/bin/opencode2"
+chmod +x "$HOME/.opencode/bin/opencode2"
+EOF
+chmod +x "$TEST_ROOT/fake-opencode-installer"
+DOTFILES_SKIP_OPENCODE_INSTALL=0 DOTFILES_SKIP_BROWSER=0 DOTFILES_PLAYWRIGHT_VERSION=9.9.9 \
+  DOTFILES_OPENCODE_INSTALLER="$TEST_ROOT/fake-opencode-installer" \
+  "$ROOT/bin/dotfiles" install --yes --only opencode >"$TEST_ROOT/opencode-install.log" 2>&1 ||
+  fail "opencode install failed: $(tail -20 "$TEST_ROOT/opencode-install.log")"
+assert_file "$HOME/.opencode/bin/opencode"
+assert_file "$HOME/.opencode/bin/opencode2"
+assert_file "$HOME/.local/state/dotfiles/opencode-installed"
+assert_contains "$HOME/bunx.log" "playwright@9.9.9 install chromium"
+assert_file "$HOME/.cache/ms-playwright/chromium-9.9.9/chrome-linux64/chrome"
+assert_no_link "$HOME/.config/opencode/agents/planner.md"
+assert_no_link "$HOME/.config/opencode/AGENTS.md"
+[[ ! -e "$HOME/.config/opencode/agents" ]] || fail "legacy agents directory remains"
+DOTFILES_SKIP_BROWSER=0 "$ROOT/bin/dotfiles" doctor --only opencode >"$TEST_ROOT/opencode-doctor.log" 2>&1 ||
+  fail "opencode doctor failed: $(tail -20 "$TEST_ROOT/opencode-doctor.log")"
+pass "opencode uses the official installer, installs matching Chromium, and prunes legacy links"
+
+# ---------------------------------------------------------------------------
 # Doctor fails on a broken link and install repairs it.
 # ---------------------------------------------------------------------------
 new_home repair
@@ -303,11 +365,13 @@ printf 'shada\n' >"$HOME/.local/state/nvim/shada"
 
 DOTFILES_DIR="$PURGE_REPO" "$PURGE_REPO/bin/dotfiles" install --yes >"$TEST_ROOT/purge-install.log" 2>&1 ||
   fail "purge fixture install failed"
+touch "$HOME/.local/state/dotfiles/opencode-installed"
 DOTFILES_DIR="$PURGE_REPO" "$PURGE_REPO/bin/dotfiles" uninstall --purge --yes >"$TEST_ROOT/purge.log" 2>&1 ||
   fail "purge failed: $(tail -20 "$TEST_ROOT/purge.log")"
 
 [[ ! -e $PURGE_REPO ]] || fail "purge left the checkout behind"
 [[ ! -e "$HOME/.local/state/dotfiles" ]] || fail "purge left recovery state behind"
+[[ ! -e "$HOME/.opencode/bin/opencode" ]] || fail "purge left the official opencode binary behind"
 assert_file "$HOME/.local/share/opencode/auth.json"
 assert_file "$HOME/.config/opencode/service.json"
 assert_file "$HOME/.config/opencode/skills/x.md"

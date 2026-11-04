@@ -1,7 +1,6 @@
 [tools]
 neovim = "0.12.6"
 "aqua:tmux/tmux-builds" = "3.7c"
-"aqua:anomalyco/opencode" = "latest"
 fzf = "latest"
 fd = "latest"
 ripgrep = "latest"

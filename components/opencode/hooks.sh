@@ -2,32 +2,131 @@
 # opencode component hooks. Auth, sessions, service.json, and skills under
 # ~/.config/opencode are user data and are never managed here.
 
-component_install() {
-  local browser_enabled
-  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-browser" 2>/dev/null || echo 1)}
-  # dry-run must not install plugin deps or download the browser
-  if $DRY_RUN; then
+OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+OPENCODE_INSTALL_URL=${DOTFILES_OPENCODE_INSTALL_URL:-https://opencode.ai/v2/install}
+PLAYWRIGHT_MCP_META_URL=${DOTFILES_PLAYWRIGHT_MCP_META_URL:-https://registry.npmjs.org/@playwright%2fmcp/latest}
+
+opencode_remove_legacy() {
+  local rel target
+  for rel in \
+    AGENTS.md \
+    agents/planner.md \
+    agents/builder.md \
+    agents/mechanical.md \
+    agents/scout.md \
+    agents/worker.md; do
+    target="$HOME/.config/opencode/$rel"
+    [[ -L $target ]] || continue
+    case "$(readlink -- "$target")" in
+      "$DOTFILES/components/opencode/"*) run rm -f -- "$target" ;;
+    esac
+  done
+  if [[ -d "$HOME/.config/opencode/agents" ]]; then
+    run rmdir -- "$HOME/.config/opencode/agents" 2>/dev/null || true
+  fi
+  # The browser toggle is gone; clean up its state file.
+  run rm -f -- "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-browser"
+}
+
+opencode_install_binary() {
+  if [[ ${DOTFILES_SKIP_OPENCODE_INSTALL:-0} == 1 ]]; then
+    debug "skipping the opencode installer"
     return 0
   fi
-  if ! command -v bun >/dev/null 2>&1; then
-    warn "bun is not on PATH; the Playwright/Svelte MCP commands need bunx"
-  else
-    local plugin_dir="$DOTFILES/components/opencode/plugins/force-background"
-    if [[ -f "$plugin_dir/package.json" && ! -d "$plugin_dir/node_modules/@opencode/plugin" ]]; then
-      if ! (cd "$plugin_dir" && bun install --frozen-lockfile); then
-        warn "failed to install the force-background plugin dependencies"
-      fi
-    fi
-    # @playwright/mcp@0.0.84 uses chromium-1252. Install it once, but never in
-    # a throwaway HOME (hermetic tests must not download the browser).
-    local chrome="$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome"
-    if [[ $browser_enabled != 0 && $HOME != /tmp/* && $HOME != /var/tmp/* && ! -f $chrome ]]; then
-      info "installing Chromium 1252 for the Playwright MCP server"
-      if ! bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium; then
-        warn "failed to install Chromium 1252; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
-      fi
+  if $DRY_RUN; then
+    info "[dry-run] install opencode with the official v2 installer"
+    return 0
+  fi
+
+  local installer=${DOTFILES_OPENCODE_INSTALLER:-} tmp=""
+  if [[ -z $installer ]]; then
+    tmp=$(mktemp "${TMPDIR:-/tmp}/opencode-install.XXXXXX")
+    installer=$tmp
+    if ! http_get "$OPENCODE_INSTALL_URL" "$installer"; then
+      rm -f -- "$tmp"
+      die "failed to download the opencode installer"
     fi
   fi
+
+  info "install opencode with the official installer"
+  if ! bash "$installer" --no-modify-path; then
+    if [[ -n $tmp ]]; then
+      rm -f -- "$tmp"
+    fi
+    die "opencode installer failed"
+  fi
+  if [[ -n $tmp ]]; then
+    rm -f -- "$tmp"
+  fi
+  touch "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-installed"
+}
+
+opencode_mcp_playwright_version() {
+  local meta version
+  if [[ -n ${DOTFILES_PLAYWRIGHT_VERSION:-} ]]; then
+    printf '%s\n' "$DOTFILES_PLAYWRIGHT_VERSION"
+    return 0
+  fi
+
+  meta=$(mktemp "${TMPDIR:-/tmp}/opencode-mcp.XXXXXX")
+  if ! http_get "$PLAYWRIGHT_MCP_META_URL" "$meta"; then
+    rm -f -- "$meta"
+    return 1
+  fi
+  version=$(sed -n 's/.*"playwright": *"\([^"]*\)".*/\1/p' "$meta" | head -n 1 || true)
+  rm -f -- "$meta"
+  [[ -n $version ]] || return 1
+  printf '%s\n' "$version"
+}
+
+opencode_install_playwright() {
+  local version
+  if [[ ${DOTFILES_SKIP_BROWSER:-0} == 1 ]]; then
+    debug "skipping the Playwright browser install"
+    return 0
+  fi
+  if $DRY_RUN; then
+    info "[dry-run] install Playwright Chromium for the MCP server"
+    return 0
+  fi
+  if ! command -v bun >/dev/null 2>&1 || ! command -v bunx >/dev/null 2>&1; then
+    warn "bun/bunx is not on PATH; the Playwright MCP browser cannot be installed"
+    return 0
+  fi
+  if ! version=$(opencode_mcp_playwright_version); then
+    warn "could not resolve the Playwright version for @playwright/mcp; retry: dotfiles install --only opencode"
+    return 0
+  fi
+  info "install Playwright Chromium for @playwright/mcp (playwright $version)"
+  if ! bunx -y "playwright@$version" install chromium; then
+    warn "failed to install Playwright Chromium; run: bunx -y playwright@$version install chromium"
+  fi
+}
+
+component_install() {
+  opencode_remove_legacy
+  if [[ ! -x $OPENCODE_BIN ]]; then
+    opencode_install_binary
+  fi
+  # dry-run must not install plugin deps; report the browser step and stop.
+  if $DRY_RUN; then
+    opencode_install_playwright
+    return 0
+  fi
+
+  if ! command -v bun >/dev/null 2>&1; then
+    warn "bun is not on PATH; the force-background plugin and Playwright MCP browser need it"
+    return 0
+  fi
+
+  local plugin_dir="$DOTFILES/components/opencode/plugins/force-background"
+  if [[ -f "$plugin_dir/package.json" && ! -d "$plugin_dir/node_modules/@opencode/plugin" ]]; then
+    if ! (cd "$plugin_dir" && bun install --frozen-lockfile); then
+      warn "failed to install the force-background plugin dependencies"
+    fi
+  fi
+
+  opencode_install_playwright
 }
 
 component_update() {
@@ -35,22 +134,24 @@ component_update() {
 }
 
 component_uninstall() {
-  :
+  local state_dir=${STATE_DIR:-$HOME/.local/state/dotfiles}
+  if ${PURGE:-false} && [[ -f "$state_dir/opencode-installed" ]]; then
+    info "remove opencode installed by the official installer"
+    run rm -f -- "$HOME/.opencode/bin/opencode" "$HOME/.opencode/bin/opencode2"
+    run rmdir -- "$HOME/.opencode/bin" "$HOME/.opencode" 2>/dev/null || true
+    run rm -f -- "$state_dir/opencode-installed"
+  fi
 }
 
 component_doctor() {
-  local failures=0 config="$HOME/.config/opencode/opencode.json" agent browser_enabled
+  local failures=0 config="$HOME/.config/opencode/opencode.json" browser
   local plugin_dir="$DOTFILES/components/opencode/plugins/force-background"
-  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-browser" 2>/dev/null || echo 1)}
-  local -a agents=(
-    "agents/planner.md"
-    "agents/builder.md"
-    "agents/mechanical.md"
-    "agents/scout.md"
-    "agents/worker.md"
-  )
   if ! command -v opencode >/dev/null 2>&1; then
     error "opencode is not on PATH"
+    failures=$((failures + 1))
+  fi
+  if [[ ! -x $OPENCODE_BIN ]]; then
+    error "opencode is not installed at $OPENCODE_BIN; run: dotfiles install --only opencode"
     failures=$((failures + 1))
   fi
   if [[ ! -f $config ]]; then
@@ -74,14 +175,15 @@ loads_plugin = any(
     for entry in plugins
 )
 ok = (
-    config.get("default_agent") == "builder"
-    and plan.get("hidden") is True
-    and build.get("hidden") is True
+    config.get("update") == "auto"
+    and not config.get("default_agent")
+    and plan.get("hidden") is not True
+    and build.get("hidden") is not True
     and loads_plugin
 )
 sys.exit(0 if ok else 1)
 '; then
-      error "opencode config must default to builder, hide plan and build, and load the force-background plugin: $config"
+      error "opencode config must keep the default agents, set update=auto, and load the force-background plugin: $config"
       failures=$((failures + 1))
     fi
   elif command -v node >/dev/null 2>&1; then
@@ -99,28 +201,19 @@ const loadsPlugin = plugins.some(
   (entry) => typeof entry === "string" && entry.includes("force-background"),
 );
 if (
-  config.default_agent !== "builder" ||
-  plan.hidden !== true ||
-  build.hidden !== true ||
+  config.update !== "auto" ||
+  config.default_agent ||
+  plan.hidden === true ||
+  build.hidden === true ||
   !loadsPlugin
 ) {
   process.exit(1);
 }
 '; then
-      error "opencode config must default to builder, hide plan and build, and load the force-background plugin: $config"
+      error "opencode config must keep the default agents, set update=auto, and load the force-background plugin: $config"
       failures=$((failures + 1))
     fi
   fi
-  if [[ ! -f "$HOME/.config/opencode/AGENTS.md" ]]; then
-    error "opencode AGENTS.md is missing"
-    failures=$((failures + 1))
-  fi
-  for agent in "${agents[@]}"; do
-    if [[ ! -f "$HOME/.config/opencode/$agent" ]]; then
-      error "opencode agent definition is missing: $agent"
-      failures=$((failures + 1))
-    fi
-  done
   if [[ ! -f "$HOME/.config/opencode/themes/vague.json" ]]; then
     error "opencode vague theme is missing"
     failures=$((failures + 1))
@@ -141,8 +234,13 @@ if (
     error "bun is not on PATH; bunx MCP servers will not start"
     failures=$((failures + 1))
   fi
-  if [[ $browser_enabled != 0 && ! -f "$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome" ]]; then
-    warn "Playwright MCP browser chromium-1252 is missing; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
+  if [[ ${DOTFILES_SKIP_BROWSER:-0} != 1 ]]; then
+    browser=$(find "$HOME/.cache/ms-playwright" -maxdepth 3 -type f \
+      \( -name chrome -o -name headless_shell \) -print -quit 2>/dev/null || true)
+    if [[ -z $browser ]]; then
+      error "Playwright Chromium is missing; run: dotfiles install --only opencode"
+      failures=$((failures + 1))
+    fi
   fi
   return "$failures"
 }

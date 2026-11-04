@@ -31,7 +31,7 @@ components, themes, tests, CI, the host migration, and archiving the old
 | zsh framework | oh-my-zsh, cloned under `~/.local/share/oh-my-zsh` |
 | nvim | vendored copy of `pratirupm/nvim` |
 | tmux | static `tmux-builds` binary via mise, TPM plugins |
-| opencode | aqua build via mise, theme + config |
+| opencode | official OpenCode V2 installer, theme + config |
 | Theme | vague, ported into base46 for NvChad |
 | Login shell | guarded `exec ~/.local/bin/zsh -l` from bash; no `chsh` |
 | Repo | public `pratirupm/.files`, cloned at `~/.files` |
@@ -100,7 +100,7 @@ Required system tools and why:
 | Tool | Reason |
 | --- | --- |
 | `git` | lazy.nvim, oh-my-zsh, tpm |
-| `curl` (or `wget`/`python3`/`busybox`) | mise, micromamba, release downloads |
+| `curl` (or `wget`/`python3`/`busybox`) | mise, micromamba, release downloads; the OpenCode installer requires `curl` specifically |
 | `tar`, `gzip`, `xz`, `bzip2` | release archives |
 | `unzip` | Mason `.zip` packages |
 | `find` | runtime and plugin lookups |
@@ -139,7 +139,6 @@ Additional checks:
 
 - `neovim` 0.12.6
 - `tmux` 3.7c (static `aqua:tmux/tmux-builds`)
-- `opencode` (`aqua:anomalyco/opencode`)
 - `fzf`, `fd`, `ripgrep`, `eza`, `starship`, `zoxide`
 - `go`, `node`, `bun` for Mason packages and the `bunx` MCP commands
 - `lazygit`, `stylua`, `shellcheck`, `shfmt`
@@ -185,7 +184,7 @@ Core lifecycle:
 3. Install mise + micromamba.
 4. `mise install` for all tools in `mise.toml`.
 5. Create the zsh environment.
-6. Per component: apply links/templates, run `install`, mark installed.
+6. Per component: apply links/templates, run `install`, mark installed. The opencode component runs the official V2 installer and refreshes its Playwright Chromium.
 7. `doctor`.
 
 `update` runs the install path for components that are not marked installed, so adding `components/python/` later is picked up automatically.
@@ -245,6 +244,7 @@ It keeps recovery state in `~/.local/state/dotfiles` and the `~/.files` checkout
 
 - `~/.local/state/dotfiles` (manifest, logs, backups) after a successful restore;
 - tools installed by the repo (`mise uninstall` for recorded tools, micromamba and its env);
+- the OpenCode binary under `~/.opencode/bin` when this repo ran the official installer;
 - `~/.files` last, after all scripts have loaded.
 
 Always preserved even with `--purge`:
@@ -269,7 +269,8 @@ Always preserved even with `--purge`:
 - `HISTFILE=~/.local/state/zsh/history`.
 - `dotfiles.zsh` is linked to `~/.config/zsh/dotfiles.zsh`, sourced after oh-my-zsh, and defines the `dotfiles-*` wrappers.
 - `mise activate zsh` and starship init are guarded by `command -v`.
-- `MISE_GLOBAL_CONFIG_FILE=$HOME/.files/mise.toml` makes the repository the global version source, so mise shims (`starship`, `tmux`, `nvim`, `opencode`) work from any directory.
+- `MISE_GLOBAL_CONFIG_FILE=$HOME/.files/mise.toml` makes the repository the global version source, so mise shims (`starship`, `tmux`, `nvim`) work from any directory.
+- `~/.opencode/bin` is placed ahead of the mise shims so the official OpenCode binary wins.
 - `fzf` integration: `source <(fzf --zsh)`; this provides `C-r` history, `C-t` files, `M-c` cd.
 - `FZF_DEFAULT_OPTS` uses the vague-fzf palette.
 - `starship.toml` defines a vague palette and module styles; it is linked to `~/.config/starship.toml`.
@@ -301,11 +302,13 @@ Always preserved even with `--purge`:
 
 ## opencode
 
-- `opencode.json` is linked, with `"theme": "vague"`.
+- Installed by the official OpenCode V2 installer (`https://opencode.ai/v2/install`) into `~/.opencode/bin`, always with `--no-modify-path`; the repo owns `PATH`.
+- `opencode.json` is linked, with `"theme": "vague"` and `"update": "auto"`; OpenCode updates itself and `dotfiles upgrade` does not manage it.
+- The built-in `build` and `plan` agents are left enabled; there are no custom agents or global `AGENTS.md`.
 - `vague-opencode/vague.json` is vendored as `opencode/themes/vague.json` and linked to `~/.config/opencode/themes/vague.json`.
-- The absolute bun path in the Playwright MCP command is replaced with `bunx -y @playwright/mcp`; `bun` is installed by mise.
+- The absolute bun path in the Playwright MCP command is replaced with `bunx -y @playwright/mcp@latest`; `bun` is installed by mise.
+- Install resolves the Playwright version required by the current `@playwright/mcp` release and runs `bunx -y playwright@<version> install chromium`. There is no prompt or browser toggle; the MCP always has its matching Chromium.
 - `service.json` is never committed; it contains a password. `skills/` is excluded (5.5 MB).
-- `opencode` is updated through `mise upgrade`, not its self-updater; `autoupdate` is disabled in the config.
 
 ## Vague theme
 

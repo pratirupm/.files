@@ -11,7 +11,10 @@ fi
 
 typeset -U path fpath
 
+# The official opencode installer owns ~/.opencode/bin. Keep it ahead of the
+# mise shims so a stale mise copy cannot shadow it.
 path=(
+  "$HOME/.opencode/bin"
   "$HOME/.local/bin"
   "$HOME/.local/share/mise/shims"
   "$ZSH_ENV/bin"

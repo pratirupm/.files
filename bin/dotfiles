@@ -6,7 +6,7 @@ DOTFILES_DIR=${DOTFILES_DIR:-$(cd -- "$(dirname -- "$SELF")/.." && pwd)}
 DOTFILES=$DOTFILES_DIR
 export DOTFILES_DIR DOTFILES
 
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 export XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 export XDG_STATE_HOME=${XDG_STATE_HOME:-$HOME/.local/state}
@@ -26,16 +26,14 @@ ONLY=""
 PURGE=false
 UPSTREAM=""
 WITH_GH=false
-browser_enabled=1
 declare -A INSTALL_SELECTED=()
-INSTALL_MENU_KEYS=(zsh tmux nvim opencode gh browser)
+INSTALL_MENU_KEYS=(zsh tmux nvim opencode gh)
 INSTALL_MENU_LABELS=(
   "zsh component"
   "tmux component"
   "nvim component"
   "opencode component"
   "gh (GitHub CLI)"
-  "Playwright Chromium 1252"
 )
 
 usage() {
@@ -143,7 +141,6 @@ install_menu() {
   local -a chosen=()
 
   install_menu_defaults
-  INSTALL_SELECTED[browser]=$browser_enabled
 
   while true; do
     install_menu_render
@@ -181,7 +178,7 @@ install_menu() {
 
   for key in "${INSTALL_MENU_KEYS[@]}"; do
     case "$key" in
-      gh | browser) continue ;;
+      gh) continue ;;
     esac
     if [[ ${INSTALL_SELECTED[$key]} == 1 ]]; then
       chosen+=("$key")
@@ -194,8 +191,6 @@ install_menu() {
     ONLY=core
   fi
   if [[ ${INSTALL_SELECTED[gh]} == 1 ]]; then WITH_GH=true; else WITH_GH=false; fi
-  if [[ ${INSTALL_SELECTED[browser]} == 1 ]]; then browser_enabled=1; else browser_enabled=0; fi
-  export DOTFILES_OPENCODE_BROWSER=$browser_enabled
 }
 
 check_existing_targets() {
@@ -368,17 +363,9 @@ ensure_gh_credential_helper() {
 install_main() {
   acquire_lock
   state_init
-  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "$STATE_DIR/opencode-browser" 2>/dev/null || echo 1)}
-  [[ $browser_enabled == 0 ]] || browser_enabled=1
-  export browser_enabled
-  export DOTFILES_OPENCODE_BROWSER=$browser_enabled
 
   if ! $DRY_RUN && ! $ASSUME_YES && [[ -z $ONLY && -r /dev/tty ]]; then
     install_menu
-  fi
-
-  if ! $DRY_RUN; then
-    printf '%s\n' "$browser_enabled" >"$STATE_DIR/opencode-browser"
   fi
 
   component_plan "$ONLY"

@@ -64,10 +64,10 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - No secrets in git. `~/.config/opencode/service.json` contains a password and must stay ignored. Never add `skills/` (5.5 MB).
 - `bootstrap.sh` stays POSIX `sh`; `install.sh`, `update.sh`, and components use `bash`.
 - `dotfiles-*` zsh functions are thin wrappers; all logic lives in `bin/dotfiles`.
-- `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades.
+- `dotfiles update` never bumps tool versions; `dotfiles upgrade` owns mise/micromamba/plugin/Mason upgrades. OpenCode is not managed there: it uses `"update": "auto"` and the official installer.
 - `dotfiles upgrade` requires a clean tree, an upstream branch, and a successful `git push --dry-run` **before** upgrading. It stages tracked files only (`git add -u`), commits lockfile changes, and pushes. Never force-push or stage untracked files.
 - `dotfiles uninstall` removes only manifest-recorded paths under `$HOME`, restores backups before deleting recovery state, and skips paths the user modified. `--purge` requires `--yes` or an interactive confirmation, removes repo-installed tools and state, and deletes `~/.files` last. Never delete opencode auth/skills, zsh history, tmux resurrect, or nvim project/shada data.
-- `mise` and `micromamba` only; no Linuxbrew, no Nix.
+- `mise` and `micromamba` manage the toolchain. OpenCode is installed by its official V2 installer. No Linuxbrew, no Nix.
 - The repo is public: run `gitleaks` before pushing.
 
 ## Component contract
@@ -86,7 +86,9 @@ Initial components: `core`, `zsh`, `tmux`, `nvim`, `opencode`. Do not add `pytho
 - **Neovim theme:** NvChad uses base46 bytecode caches loaded after plugins. `vague.nvim` must not be loaded directly; use the base46 port in `lua/themes/vague.lua` and `theme = "vague"`. After changing the theme run `nvim --headless "+lua require('base46').load_all_highlights()" +qa`.
 - **base46 group names:** `TabOn`/`TabOff` and `BufOn`/`BufOff` are undefined. Link them to `TbTabOn`/`TbTabOff`/`TbBufOn`/`TbBufOff` and reapply on `User NvThemeReload`.
 - **tmux:** `default-shell` points at `~/.local/bin/zsh`, so the tmux component requires `zsh`. Source the vendored `vague.conf` for colors, then apply keymaps. Keep `set-clipboard on` for OSC 52.
-- **opencode:** replace absolute bun paths with `bunx -y`; the config is linked, `service.json` is never committed, and `bun` comes from `mise.toml` for `bunx`.
+- **opencode:** installed by the official V2 installer into `~/.opencode/bin`, always with `--no-modify-path`; `~/.opencode/bin` comes before the mise shims. Never add it back to `mise.toml`. It self-updates with `"update": "auto"`, so `dotfiles upgrade` must not touch it.
+- **Playwright MCP:** `@playwright/mcp@latest` may depend on a Playwright alpha, not stable `playwright@latest`. Resolve its `playwright` dependency from the npm registry and install that Chromium; never substitute `playwright@latest` or a hardcoded Chromium revision.
+- **opencode config:** keep the built-in `build` and `plan` agents enabled; there are no custom agent files or global `AGENTS.md`.
 - **glibc:** Neovim 0.12.6 needs glibc >= 2.34. Detect musl and stop before downloading.
 - **stdin:** `curl | bash` leaves stdin as the pipe. Interactive confirmations read `/dev/tty`; on a machine without a terminal, pass `--yes` or the install stops before changing anything.
 

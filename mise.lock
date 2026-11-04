@@ -2,35 +2,6 @@
 
 lockfile_version = 3
 
-[[tools."aqua:anomalyco/opencode"]]
-version = "2.2.2"
-backend = "aqua:anomalyco/opencode"
-specifiers = ["latest"]
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-arm64"]
-checksum = "sha256:dd866cebb72d11c91a7a7c4c3fd961ee06e03a9d0a5ff8eaa2a8ebebf25de7ba"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-arm64.tar.gz"
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-arm64-musl"]
-checksum = "sha256:dd866cebb72d11c91a7a7c4c3fd961ee06e03a9d0a5ff8eaa2a8ebebf25de7ba"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-arm64.tar.gz"
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-x64"]
-checksum = "sha256:3a38b8c284450a5ca81a2c1ebbf29ebe05e618518f095da0066652167eb0eb33"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-x64.tar.gz"
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-x64-baseline"]
-checksum = "sha256:3a38b8c284450a5ca81a2c1ebbf29ebe05e618518f095da0066652167eb0eb33"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-x64.tar.gz"
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-x64-musl"]
-checksum = "sha256:3a38b8c284450a5ca81a2c1ebbf29ebe05e618518f095da0066652167eb0eb33"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-x64.tar.gz"
-
-[tools."aqua:anomalyco/opencode"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:3a38b8c284450a5ca81a2c1ebbf29ebe05e618518f095da0066652167eb0eb33"
-url = "https://opencode.ai/files/bin/2.2.2/opencode-linux-x64.tar.gz"
-
 [[tools."aqua:tmux/tmux-builds"]]
 version = "3.7c"
 backend = "aqua:tmux/tmux-builds"

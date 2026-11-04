@@ -22,7 +22,7 @@ less /tmp/bootstrap.sh
 bash /tmp/bootstrap.sh
 ```
 
-`git` and an HTTPS fetcher (`curl`, or `wget`/`python3`/`busybox` as a fallback) are the only entry requirements. Everything else is installed per-user with `mise` and `micromamba`.
+`git` and `curl` are the only entry requirements; the official OpenCode installer requires `curl`. Everything else is installed per-user with `mise`, `micromamba`, and that installer.
 
 ## Everyday commands
 
@@ -51,16 +51,11 @@ before planning. A number toggles that item, `a` selects all, `n` selects none,
 - components `zsh`, `tmux`, `nvim`, and `opencode`, all on by default; `core` is
   required and always installed
 - the `gh` extra, off by default
-- the Playwright Chromium 1252 browser, on by default
 
-The menu is the only way to choose the `gh` and browser extras; neither has a
-flag. `--only` still narrows the component list. Without the menu (for example
-`--yes`, no TTY, or `--dry-run`) installs use the defaults: all components with
-the `gh` extra off, and the remembered browser choice (on by default).
-
-The browser choice made in the menu is remembered in
-`~/.local/state/dotfiles/opencode-browser` and reused on later installs until it
-is changed again.
+The menu is the only way to choose the `gh` extra; it has no flag. `--only`
+still narrows the component list. Without the menu (for example `--yes`, no
+TTY, or `--dry-run`) installs use the defaults: all components with the `gh`
+extra off.
 
 The `gh` extra installs the GitHub CLI with mise, links it to
 `~/.local/bin/gh`, and wires the `gh auth git-credential` helper for
@@ -76,14 +71,19 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 - `zsh` — micromamba zsh, oh-my-zsh, plugins, fzf, and a vague starship prompt
 - `tmux` — vague colors, keymaps, resurrect/continuum
 - `nvim` — vendored NvChad config with a vague base46 theme
-- `opencode` — config, vague theme, `AGENTS.md`, the `planner`/`builder`
-  manager agents, the `scout`/`mechanical`/`worker` subagents, the
+- `opencode` — the official OpenCode V2 installer, config, vague theme,
   force-background plugin, and the Playwright/Svelte `bunx` MCP servers.
-  Install pins `@playwright/mcp@0.0.84` and downloads Chromium 1252 once for
-  the Playwright MCP server (skipped for throwaway homes under `/tmp`).
+  Install always ensures the Chromium build matching the current
+  `@playwright/mcp` Playwright dependency is present; there is no prompt or
+  browser toggle. OpenCode updates itself through `"update": "auto"`.
 
 `doctor` and `status` are safe to run on a new machine. `doctor` checks
 prerequisites, symlinks, rendered files, component markers, and versions.
+
+If an earlier version installed OpenCode through mise, its old copy is ignored
+because `~/.opencode/bin` comes first on `PATH`. Reclaim the space with
+`mise uninstall --yes aqua:anomalyco/opencode` after confirming the official
+binary works.
 
 ## Layout
 
@@ -107,7 +107,8 @@ tests/run.sh          hermetic install/update/uninstall/upgrade tests
 - `dotfiles uninstall` removes only manifest-recorded links/templates, restores
   backups, and leaves modified files alone with a warning.
 - `--purge` additionally removes recovery state, repo-installed tools, and
-  `~/.files` last.
+  `~/.files` last. If this repo installed OpenCode, its binary under
+  `~/.opencode/bin` is removed too.
 - Even with `--purge`, these are preserved: `~/.local/share/opencode`,
   `~/.config/opencode/service.json`, `~/.config/opencode/skills`,
   `~/.local/state/zsh/history`, `~/.tmux/resurrect`,
