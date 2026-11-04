@@ -170,16 +170,6 @@ new_home dryrun
 pass "dry-run leaves the home untouched"
 
 # ---------------------------------------------------------------------------
-# --with-gh dry-run plans the gh install/link without changing the home.
-# ---------------------------------------------------------------------------
-new_home with-gh
-"$ROOT/bin/dotfiles" install --dry-run --yes --only core --with-gh >"$TEST_ROOT/with-gh.log" 2>&1 ||
-  fail "--with-gh dry-run failed"
-assert_contains "$TEST_ROOT/with-gh.log" "[dry-run] link gh into"
-[[ ! -e "$HOME/.local/bin/gh" ]] || fail "--with-gh dry-run created a gh symlink"
-pass "--with-gh dry-run plans gh without changing the home"
-
-# ---------------------------------------------------------------------------
 # --only includes REQUIRES/AFTER dependencies and excludes unrelated components.
 # ---------------------------------------------------------------------------
 new_home only

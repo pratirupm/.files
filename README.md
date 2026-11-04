@@ -29,8 +29,7 @@ bash /tmp/bootstrap.sh
 ```sh
 dotfiles install            # prompt for components/extras, then apply
 dotfiles install --yes      # accept the defaults non-interactively
-dotfiles install --with-gh  # also install gh via mise and wire git credentials
-dotfiles install --no-browser  # skip the Playwright Chromium download
+dotfiles install --only zsh # install just zsh (plus required components)
 dotfiles update             # git pull --ff-only, then apply changes; no version bumps
 dotfiles upgrade       # maintainer: verify, upgrade tools, commit lockfiles, push
 dotfiles uninstall     # remove managed paths and restore backups
@@ -54,15 +53,19 @@ before planning. A number toggles that item, `a` selects all, `n` selects none,
 - the `gh` extra, off by default
 - the Playwright Chromium 1252 browser, on by default
 
-`--with-gh` preselects the GitHub CLI and `--no-browser` preselects the browser
-off, so both work for non-interactive runs. The browser choice is remembered in
+The menu is the only way to choose the `gh` and browser extras; neither has a
+flag. `--only` still narrows the component list. Without the menu (for example
+`--yes`, no TTY, or `--dry-run`) installs use the defaults: all components with
+the `gh` extra off, and the remembered browser choice (on by default).
+
+The browser choice made in the menu is remembered in
 `~/.local/state/dotfiles/opencode-browser` and reused on later installs until it
 is changed again.
 
-`install --with-gh` is opt-in: it installs the GitHub CLI with mise, links it to
+The `gh` extra installs the GitHub CLI with mise, links it to
 `~/.local/bin/gh`, and wires the `gh auth git-credential` helper for
 `github.com` and `gist.github.com`. You still need to run `gh auth login` once
-to authenticate. `update`, `doctor`, and `status` ignore the flag.
+to authenticate. `update`, `doctor`, and `status` ignore it.
 
 zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 `dotfiles-upgrade`, `dotfiles-uninstall`, `dotfiles-doctor`, `dotfiles-status`.
