@@ -52,7 +52,9 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
 - `nvim` — vendored NvChad config with a vague base46 theme
 - `opencode` — config, vague theme, `AGENTS.md`, the `planner`/`builder`
   manager agents, the `scout`/`mechanical`/`worker` subagents, the
-  force-background plugin, and the Playwright/Svelte `bunx` MCP servers
+  force-background plugin, and the Playwright/Svelte `bunx` MCP servers.
+  Install pins `@playwright/mcp@0.0.84` and downloads Chromium 1252 once for
+  the Playwright MCP server (skipped for throwaway homes under `/tmp`).
 
 `doctor` and `status` are safe to run on a new machine. `doctor` checks
 prerequisites, symlinks, rendered files, component markers, and versions.

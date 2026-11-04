@@ -16,7 +16,7 @@
         "command": [
           "bunx",
           "-y",
-          "@playwright/mcp",
+          "@playwright/mcp@0.0.84",
           "--browser",
           "chromium",
           "--headless"

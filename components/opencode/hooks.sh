@@ -3,6 +3,10 @@
 # ~/.config/opencode are user data and are never managed here.
 
 component_install() {
+  # dry-run must not install plugin deps or download the browser
+  if $DRY_RUN; then
+    return 0
+  fi
   if ! command -v bun >/dev/null 2>&1; then
     warn "bun is not on PATH; the Playwright/Svelte MCP commands need bunx"
   else
@@ -10,6 +14,15 @@ component_install() {
     if [[ -f "$plugin_dir/package.json" && ! -d "$plugin_dir/node_modules/@opencode/plugin" ]]; then
       if ! (cd "$plugin_dir" && bun install --frozen-lockfile); then
         warn "failed to install the force-background plugin dependencies"
+      fi
+    fi
+    # @playwright/mcp@0.0.84 uses chromium-1252. Install it once, but never in
+    # a throwaway HOME (hermetic tests must not download the browser).
+    local chrome="$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome"
+    if [[ $HOME != /tmp/* && $HOME != /var/tmp/* && ! -f $chrome ]]; then
+      info "installing Chromium 1252 for the Playwright MCP server"
+      if ! bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium; then
+        warn "failed to install Chromium 1252; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
       fi
     fi
   fi
@@ -125,8 +138,8 @@ if (
     error "bun is not on PATH; bunx MCP servers will not start"
     failures=$((failures + 1))
   fi
-  if ! compgen -G "$HOME/.cache/ms-playwright/chromium-*/chrome-linux64/chrome" >/dev/null; then
-    warn "Playwright MCP browser is missing; run: bunx -y @playwright/mcp install-browser chrome-for-testing"
+  if [[ ! -f "$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome" ]]; then
+    warn "Playwright MCP browser chromium-1252 is missing; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
   fi
   return "$failures"
 }
