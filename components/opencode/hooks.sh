@@ -3,6 +3,8 @@
 # ~/.config/opencode are user data and are never managed here.
 
 component_install() {
+  local browser_enabled
+  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-browser" 2>/dev/null || echo 1)}
   # dry-run must not install plugin deps or download the browser
   if $DRY_RUN; then
     return 0
@@ -19,7 +21,7 @@ component_install() {
     # @playwright/mcp@0.0.84 uses chromium-1252. Install it once, but never in
     # a throwaway HOME (hermetic tests must not download the browser).
     local chrome="$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome"
-    if [[ $HOME != /tmp/* && $HOME != /var/tmp/* && ! -f $chrome ]]; then
+    if [[ $browser_enabled != 0 && $HOME != /tmp/* && $HOME != /var/tmp/* && ! -f $chrome ]]; then
       info "installing Chromium 1252 for the Playwright MCP server"
       if ! bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium; then
         warn "failed to install Chromium 1252; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
@@ -37,8 +39,9 @@ component_uninstall() {
 }
 
 component_doctor() {
-  local failures=0 config="$HOME/.config/opencode/opencode.json" agent
+  local failures=0 config="$HOME/.config/opencode/opencode.json" agent browser_enabled
   local plugin_dir="$DOTFILES/components/opencode/plugins/force-background"
+  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "${STATE_DIR:-$HOME/.local/state/dotfiles}/opencode-browser" 2>/dev/null || echo 1)}
   local -a agents=(
     "agents/planner.md"
     "agents/builder.md"
@@ -138,7 +141,7 @@ if (
     error "bun is not on PATH; bunx MCP servers will not start"
     failures=$((failures + 1))
   fi
-  if [[ ! -f "$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome" ]]; then
+  if [[ $browser_enabled != 0 && ! -f "$HOME/.cache/ms-playwright/chromium-1252/chrome-linux64/chrome" ]]; then
     warn "Playwright MCP browser chromium-1252 is missing; run: bunx -y playwright@1.65.0-alpha-2026-10-30 install chromium"
   fi
   return "$failures"

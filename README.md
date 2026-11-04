@@ -27,9 +27,11 @@ bash /tmp/bootstrap.sh
 ## Everyday commands
 
 ```sh
-dotfiles install       # apply links/templates and install missing components
+dotfiles install            # prompt for components/extras, then apply
+dotfiles install --yes      # accept the defaults non-interactively
 dotfiles install --with-gh  # also install gh via mise and wire git credentials
-dotfiles update        # git pull --ff-only, then apply changes; no version bumps
+dotfiles install --no-browser  # skip the Playwright Chromium download
+dotfiles update             # git pull --ff-only, then apply changes; no version bumps
 dotfiles upgrade       # maintainer: verify, upgrade tools, commit lockfiles, push
 dotfiles uninstall     # remove managed paths and restore backups
 dotfiles uninstall --purge
@@ -41,6 +43,21 @@ Every command accepts `--dry-run` (`-n`). `install`, `update`, and `uninstall`
 accept `--yes` (`-y`); `install` and `update` accept `--only zsh,tmux` (required
 components are included automatically). `uninstall --purge` requires `--yes` or
 an interactive confirmation.
+
+When `dotfiles install` runs interactively (no `--yes`, no `--only`, no
+`--dry-run`, and `/dev/tty` is readable), it shows a numbered multi-select menu
+before planning. A number toggles that item, `a` selects all, `n` selects none,
+`d` restores defaults, Enter accepts, and `q` aborts. The menu offers:
+
+- components `zsh`, `tmux`, `nvim`, and `opencode`, all on by default; `core` is
+  required and always installed
+- the `gh` extra, off by default
+- the Playwright Chromium 1252 browser, on by default
+
+`--with-gh` preselects the GitHub CLI and `--no-browser` preselects the browser
+off, so both work for non-interactive runs. The browser choice is remembered in
+`~/.local/state/dotfiles/opencode-browser` and reused on later installs until it
+is changed again.
 
 `install --with-gh` is opt-in: it installs the GitHub CLI with mise, links it to
 `~/.local/bin/gh`, and wires the `gh auth git-credential` helper for

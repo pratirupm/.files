@@ -26,6 +26,18 @@ ONLY=""
 PURGE=false
 UPSTREAM=""
 WITH_GH=false
+NO_BROWSER=false
+browser_enabled=1
+declare -A INSTALL_SELECTED=()
+INSTALL_MENU_KEYS=(zsh tmux nvim opencode gh browser)
+INSTALL_MENU_LABELS=(
+  "zsh component"
+  "tmux component"
+  "nvim component"
+  "opencode component"
+  "gh (GitHub CLI)"
+  "Playwright Chromium 1252"
+)
 
 usage() {
   cat <<'EOF'
@@ -44,6 +56,7 @@ Options:
   -y, --yes            Assume yes for backups and --purge
       --only LIST      Comma-separated components (dependencies are included)
       --with-gh        Install the GitHub CLI (gh) and wire git credentials
+      --no-browser     Skip the Playwright Chromium download
   -h, --help           Show this help
 EOF
 }
@@ -76,6 +89,10 @@ parse_args() {
         WITH_GH=true
         shift
         ;;
+      --no-browser)
+        NO_BROWSER=true
+        shift
+        ;;
       -h | --help)
         usage
         exit 0
@@ -97,6 +114,101 @@ parse_args() {
     usage
     exit 2
   }
+}
+
+install_menu_defaults() {
+  local key
+  INSTALL_SELECTED=()
+  for key in "${INSTALL_MENU_KEYS[@]}"; do
+    case "$key" in
+      gh) INSTALL_SELECTED[$key]=0 ;;
+      *) INSTALL_SELECTED[$key]=1 ;;
+    esac
+  done
+}
+
+install_menu_render() {
+  local i key marker
+  {
+    log ""
+    log "${C_BOLD}Select components and extras${C_RESET}"
+    log "  core component: required, always installed"
+    for i in "${!INSTALL_MENU_KEYS[@]}"; do
+      key=${INSTALL_MENU_KEYS[i]}
+      if [[ ${INSTALL_SELECTED[$key]} == 1 ]]; then
+        marker="[x]"
+      else
+        marker="[ ]"
+      fi
+      printf '  %d) %s %s\n' "$((i + 1))" "$marker" "${INSTALL_MENU_LABELS[i]}"
+    done
+    log "  a) all  n) none  d) defaults  Enter) install  q) abort"
+    printf '> '
+  } >/dev/tty
+}
+
+# Interactive multi-select. Reads and writes only through /dev/tty so that
+# piped stdin stays available to the rest of the install.
+install_menu() {
+  local choice key index
+  local -a chosen=()
+
+  install_menu_defaults
+  INSTALL_SELECTED[browser]=$browser_enabled
+  if $WITH_GH; then INSTALL_SELECTED[gh]=1; fi
+  if $NO_BROWSER; then INSTALL_SELECTED[browser]=0; fi
+
+  while true; do
+    install_menu_render
+    IFS= read -r choice </dev/tty || die "aborted: could not read the install selection"
+    case "$choice" in
+      "")
+        break
+        ;;
+      a | A)
+        for key in "${INSTALL_MENU_KEYS[@]}"; do INSTALL_SELECTED[$key]=1; done
+        ;;
+      n | N)
+        for key in "${INSTALL_MENU_KEYS[@]}"; do INSTALL_SELECTED[$key]=0; done
+        ;;
+      d | D)
+        install_menu_defaults
+        ;;
+      q | Q)
+        die "aborted by user"
+        ;;
+      *)
+        if [[ $choice =~ ^[0-9]+$ ]] &&
+          ((10#$choice >= 1 && 10#$choice <= ${#INSTALL_MENU_KEYS[@]})); then
+          index=$((10#$choice - 1))
+          key=${INSTALL_MENU_KEYS[index]}
+          if [[ ${INSTALL_SELECTED[$key]} == 1 ]]; then
+            INSTALL_SELECTED[$key]=0
+          else
+            INSTALL_SELECTED[$key]=1
+          fi
+        fi
+        ;;
+    esac
+  done
+
+  for key in "${INSTALL_MENU_KEYS[@]}"; do
+    case "$key" in
+      gh | browser) continue ;;
+    esac
+    if [[ ${INSTALL_SELECTED[$key]} == 1 ]]; then
+      chosen+=("$key")
+    fi
+  done
+
+  if ((${#chosen[@]})); then
+    ONLY=$(join_by , "${chosen[@]}")
+  else
+    ONLY=core
+  fi
+  if [[ ${INSTALL_SELECTED[gh]} == 1 ]]; then WITH_GH=true; else WITH_GH=false; fi
+  if [[ ${INSTALL_SELECTED[browser]} == 1 ]]; then browser_enabled=1; else browser_enabled=0; fi
+  export DOTFILES_OPENCODE_BROWSER=$browser_enabled
 }
 
 check_existing_targets() {
@@ -269,6 +381,22 @@ ensure_gh_credential_helper() {
 install_main() {
   acquire_lock
   state_init
+  browser_enabled=${DOTFILES_OPENCODE_BROWSER:-$(cat "$STATE_DIR/opencode-browser" 2>/dev/null || echo 1)}
+  [[ $browser_enabled == 0 ]] || browser_enabled=1
+  if $NO_BROWSER; then
+    browser_enabled=0
+  fi
+  export browser_enabled
+  export DOTFILES_OPENCODE_BROWSER=$browser_enabled
+
+  if ! $DRY_RUN && ! $ASSUME_YES && [[ -z $ONLY && -r /dev/tty ]]; then
+    install_menu
+  fi
+
+  if ! $DRY_RUN; then
+    printf '%s\n' "$browser_enabled" >"$STATE_DIR/opencode-browser"
+  fi
+
   component_plan "$ONLY"
   check_existing_targets
   preflight_run 0
