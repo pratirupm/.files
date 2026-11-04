@@ -297,6 +297,69 @@ PLAYWRIGHT_BROWSERS_PATH="$HOME/custom-browsers" DOTFILES_SKIP_BROWSER=0 \
 pass "opencode uses the official installer, installs matching Chromium, and prunes legacy links"
 
 # ---------------------------------------------------------------------------
+# A failed Chromium download is retried, and a persistent failure fails the
+# install instead of reporting success.
+# ---------------------------------------------------------------------------
+mkdir -p "$TEST_ROOT/stubs-flaky"
+cat >"$TEST_ROOT/stubs-flaky/bun" <<'EOF'
+#!/bin/bash
+if [[ ${1:-} == x ]]; then
+  if [[ ! -f $HOME/bun-failed-once ]]; then
+    : >"$HOME/bun-failed-once"
+    echo "simulated Chromium download failure" >&2
+    exit 1
+  fi
+  shift
+  version=""
+  for arg in "$@"; do
+    case "$arg" in
+      playwright@*) version=${arg#playwright@} ;;
+    esac
+  done
+  if [[ -n $version ]]; then
+    mkdir -p "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64"
+    printf '#!/bin/sh\nexit 0\n' >"$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+    chmod +x "$HOME/.cache/ms-playwright/chromium-$version/chrome-linux64/chrome"
+  fi
+fi
+printf '1.4.4\n'
+EOF
+chmod +x "$TEST_ROOT/stubs-flaky/bun"
+
+new_home opencode-retry
+DOTFILES_SKIP_OPENCODE_INSTALL=0 DOTFILES_SKIP_BROWSER=0 DOTFILES_PLAYWRIGHT_VERSION=9.9.9 \
+  DOTFILES_PLAYWRIGHT_RETRY_DELAY=0 DOTFILES_OPENCODE_INSTALLER="$TEST_ROOT/fake-opencode-installer" \
+  PATH="$TEST_ROOT/stubs-flaky:$PATH" \
+  "$ROOT/bin/dotfiles" install --yes --only opencode >"$TEST_ROOT/opencode-retry.log" 2>&1 ||
+  fail "opencode install did not retry the Chromium download: $(tail -20 "$TEST_ROOT/opencode-retry.log")"
+assert_contains "$TEST_ROOT/opencode-retry.log" "attempt 1/3"
+assert_file "$HOME/.cache/ms-playwright/chromium-9.9.9/chrome-linux64/chrome"
+pass "a failed Chromium download is retried"
+
+mkdir -p "$TEST_ROOT/stubs-broken"
+cat >"$TEST_ROOT/stubs-broken/bun" <<'EOF'
+#!/bin/bash
+if [[ ${1:-} == x ]]; then
+  echo "simulated Chromium download failure" >&2
+  exit 1
+fi
+printf '1.4.4\n'
+EOF
+chmod +x "$TEST_ROOT/stubs-broken/bun"
+
+new_home opencode-broken
+set +e
+DOTFILES_SKIP_OPENCODE_INSTALL=0 DOTFILES_SKIP_BROWSER=0 DOTFILES_PLAYWRIGHT_VERSION=9.9.9 \
+  DOTFILES_PLAYWRIGHT_RETRY_DELAY=0 DOTFILES_OPENCODE_INSTALLER="$TEST_ROOT/fake-opencode-installer" \
+  PATH="$TEST_ROOT/stubs-broken:$PATH" \
+  "$ROOT/bin/dotfiles" install --yes --only opencode >"$TEST_ROOT/opencode-broken.log" 2>&1
+code=$?
+set -e
+[[ $code -ne 0 ]] || fail "install reported success without a Playwright Chromium"
+assert_contains "$TEST_ROOT/opencode-broken.log" "failed to install Playwright Chromium"
+pass "a persistent Chromium download failure fails the install"
+
+# ---------------------------------------------------------------------------
 # Doctor fails on a broken link and install repairs it.
 # ---------------------------------------------------------------------------
 new_home repair

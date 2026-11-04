@@ -75,7 +75,8 @@ zsh wrappers are installed as well: `dotfiles-install`, `dotfiles-update`,
   force-background plugin, and the Playwright/Svelte Bun MCP servers.
   Install always ensures the Chromium build matching the current
   `@playwright/mcp` Playwright dependency is present; there is no prompt or
-  browser toggle. OpenCode updates itself through `"update": "auto"`.
+  browser toggle. A failed browser download is retried three times and then
+  fails the install. OpenCode updates itself through `"update": "auto"`.
 
 `doctor` and `status` are safe to run on a new machine. `doctor` checks
 prerequisites, symlinks, rendered files, component markers, and versions.

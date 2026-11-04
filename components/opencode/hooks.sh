@@ -80,7 +80,7 @@ opencode_mcp_playwright_version() {
 }
 
 opencode_install_playwright() {
-  local version root log browser
+  local version root log attempt delay=${DOTFILES_PLAYWRIGHT_RETRY_DELAY:-5}
   if [[ ${DOTFILES_SKIP_BROWSER:-0} == 1 ]]; then
     debug "skipping the Playwright browser install"
     return 0
@@ -94,8 +94,8 @@ opencode_install_playwright() {
     return 0
   fi
   if ! version=$(opencode_mcp_playwright_version); then
-    warn "could not resolve the Playwright version for @playwright/mcp; retry: dotfiles install --only opencode"
-    return 0
+    error "could not resolve the Playwright version for @playwright/mcp (npm registry unreachable?)"
+    return 1
   fi
 
   root=$(opencode_browser_root)
@@ -109,26 +109,30 @@ opencode_install_playwright() {
   } >"$log"
 
   info "install Playwright Chromium for @playwright/mcp (playwright $version)"
-  if ! env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
-    bun x -y "playwright@$version" install chromium 2>&1 | tee -a "$log"; then
-    warn "failed to install Playwright Chromium; see $log"
-    return 0
-  fi
-
-  browser=$(opencode_browser_binary)
-  if [[ -n $browser ]]; then
-    return 0
-  fi
-
-  info "Playwright reported success but no browser was found; retrying with --force"
-  if ! env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
-    bun x -y "playwright@$version" install --force chromium 2>&1 | tee -a "$log"; then
-    warn "failed to install Playwright Chromium; see $log"
-    return 0
-  fi
-  if [[ -z $(opencode_browser_binary) ]]; then
-    warn "Playwright Chromium is still missing from $root; see $log"
-  fi
+  # The download is a few hundred MiB from the Playwright CDN and does fail on
+  # flaky links; retries reuse whatever bun and Playwright already cached. The
+  # last attempt forces a fresh install, in case a partial cache made Playwright
+  # exit successfully without leaving a browser behind.
+  for attempt in 1 2 3; do
+    if ((attempt == 3)); then
+      info "forcing a fresh Playwright Chromium install"
+      env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
+        bun x -y "playwright@$version" install --force chromium 2>&1 | tee -a "$log" || true
+    else
+      env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
+        bun x -y "playwright@$version" install chromium 2>&1 | tee -a "$log" || true
+    fi
+    if [[ -n $(opencode_browser_binary) ]]; then
+      return 0
+    fi
+    if ((attempt < 3)); then
+      warn "Playwright Chromium is missing after attempt $attempt/3; retrying in ${delay}s"
+      sleep "$delay"
+    fi
+  done
+  error "failed to install Playwright Chromium for @playwright/mcp (playwright $version); see $log"
+  error "retry: dotfiles install --only opencode, or: bun x -y playwright@$version install chromium"
+  return 1
 }
 
 opencode_browser_root() {
@@ -174,7 +178,8 @@ component_install() {
     fi
   fi
 
-  opencode_install_playwright
+  opencode_install_playwright ||
+    die "the Playwright MCP browser is required; fix the error above and re-run: dotfiles install --only opencode"
 }
 
 component_update() {
