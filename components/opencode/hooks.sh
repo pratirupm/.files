@@ -80,7 +80,7 @@ opencode_mcp_playwright_version() {
 }
 
 opencode_install_playwright() {
-  local version
+  local version root log browser
   if [[ ${DOTFILES_SKIP_BROWSER:-0} == 1 ]]; then
     debug "skipping the Playwright browser install"
     return 0
@@ -97,9 +97,37 @@ opencode_install_playwright() {
     warn "could not resolve the Playwright version for @playwright/mcp; retry: dotfiles install --only opencode"
     return 0
   fi
+
+  root=$(opencode_browser_root)
+  log="${STATE_DIR:-$HOME/.local/state/dotfiles}/logs/opencode-playwright.log"
+  mkdir -p "$(dirname "$log")"
+  {
+    printf '== %s\n' "$(date -Is)"
+    printf 'bun=%s\n' "$(command -v bun)"
+    printf 'root=%s\n' "$root"
+    printf 'version=%s\n' "$version"
+  } >"$log"
+
   info "install Playwright Chromium for @playwright/mcp (playwright $version)"
-  if ! bun x -y "playwright@$version" install chromium; then
-    warn "failed to install Playwright Chromium; run: bun x -y playwright@$version install chromium"
+  if ! env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
+    bun x -y "playwright@$version" install chromium 2>&1 | tee -a "$log"; then
+    warn "failed to install Playwright Chromium; see $log"
+    return 0
+  fi
+
+  browser=$(opencode_browser_binary)
+  if [[ -n $browser ]]; then
+    return 0
+  fi
+
+  info "Playwright reported success but no browser was found; retrying with --force"
+  if ! env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD \
+    bun x -y "playwright@$version" install --force chromium 2>&1 | tee -a "$log"; then
+    warn "failed to install Playwright Chromium; see $log"
+    return 0
+  fi
+  if [[ -z $(opencode_browser_binary) ]]; then
+    warn "Playwright Chromium is still missing from $root; see $log"
   fi
 }
 
@@ -113,6 +141,14 @@ opencode_browser_root() {
     return 0
   fi
   printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright"
+}
+
+opencode_browser_binary() {
+  local root
+  root=$(opencode_browser_root)
+  find -H "$root" -maxdepth 8 -type f \
+    \( -name chrome -o -name headless_shell -o -name chrome-headless-shell \) \
+    -print -quit 2>/dev/null || true
 }
 
 component_install() {
@@ -249,8 +285,7 @@ if (
   if [[ ${DOTFILES_SKIP_BROWSER:-0} != 1 ]]; then
     local browser_root
     browser_root=$(opencode_browser_root)
-    browser=$(find "$browser_root" -maxdepth 8 -type f \
-      \( -name chrome -o -name headless_shell -o -name chrome-headless-shell \) -print -quit 2>/dev/null || true)
+    browser=$(opencode_browser_binary)
     if [[ -z $browser ]]; then
       error "Playwright Chromium is missing from $browser_root; run: dotfiles install --only opencode"
       failures=$((failures + 1))

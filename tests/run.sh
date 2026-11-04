@@ -289,6 +289,11 @@ assert_no_link "$HOME/.config/opencode/AGENTS.md"
 [[ ! -e "$HOME/.config/opencode/agents" ]] || fail "legacy agents directory remains"
 DOTFILES_SKIP_BROWSER=0 "$ROOT/bin/dotfiles" doctor --only opencode >"$TEST_ROOT/opencode-doctor.log" 2>&1 ||
   fail "opencode doctor failed: $(tail -20 "$TEST_ROOT/opencode-doctor.log")"
+mkdir -p "$HOME/custom-browsers/chromium-9.9.9/chrome-linux64"
+printf '#!/bin/sh\nexit 0\n' >"$HOME/custom-browsers/chromium-9.9.9/chrome-linux64/chrome"
+PLAYWRIGHT_BROWSERS_PATH="$HOME/custom-browsers" DOTFILES_SKIP_BROWSER=0 \
+  "$ROOT/bin/dotfiles" doctor --only opencode >"$TEST_ROOT/opencode-doctor-custom.log" 2>&1 ||
+  fail "opencode doctor ignored PLAYWRIGHT_BROWSERS_PATH: $(tail -20 "$TEST_ROOT/opencode-doctor-custom.log")"
 pass "opencode uses the official installer, installs matching Chromium, and prunes legacy links"
 
 # ---------------------------------------------------------------------------
