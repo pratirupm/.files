@@ -9,23 +9,17 @@
       "playwright": {
         "type": "local",
         "command": [
-          "bun",
+          "/var/home/pm/.local/share/mise/shims/bun",
           "x",
           "-y",
           "@playwright/mcp@latest",
           "--browser",
           "chromium",
           "--headless"
-        ]
-      },
-      "svelte": {
-        "type": "local",
-        "command": [
-          "bun",
-          "x",
-          "-y",
-          "@sveltejs/mcp"
-        ]
+        ],
+        "environment": {
+          "MISE_GLOBAL_CONFIG_FILE": "/var/home/pm/.files/mise.toml"
+        }
       }
     }
   }
